@@ -1,0 +1,6 @@
+-js js/seabattle.js
+--js-modern
+--dead-code-elimination
+-main Seabattle
+-lib createjs
+-cmd open index.html
