@@ -1,5 +1,56 @@
 (function () { "use strict";
 var $estr = function() { return js.Boot.__string_rec(this,''); };
+var Hash = function() {
+	this.h = { };
+};
+Hash.__name__ = true;
+Hash.prototype = {
+	toString: function() {
+		var s = new StringBuf();
+		s.b += Std.string("{");
+		var it = this.keys();
+		while( it.hasNext() ) {
+			var i = it.next();
+			s.b += Std.string(i);
+			s.b += Std.string(" => ");
+			s.b += Std.string(Std.string(this.get(i)));
+			if(it.hasNext()) s.b += Std.string(", ");
+		}
+		s.b += Std.string("}");
+		return s.b;
+	}
+	,iterator: function() {
+		return { ref : this.h, it : this.keys(), hasNext : function() {
+			return this.it.hasNext();
+		}, next : function() {
+			var i = this.it.next();
+			return this.ref["$" + i];
+		}};
+	}
+	,keys: function() {
+		var a = [];
+		for( var key in this.h ) {
+		if(this.h.hasOwnProperty(key)) a.push(key.substr(1));
+		}
+		return HxOverrides.iter(a);
+	}
+	,remove: function(key) {
+		key = "$" + key;
+		if(!this.h.hasOwnProperty(key)) return false;
+		delete(this.h[key]);
+		return true;
+	}
+	,exists: function(key) {
+		return this.h.hasOwnProperty("$" + key);
+	}
+	,get: function(key) {
+		return this.h["$" + key];
+	}
+	,set: function(key,value) {
+		this.h["$" + key] = value;
+	}
+	,__class__: Hash
+}
 var HxOverrides = function() { }
 HxOverrides.__name__ = true;
 HxOverrides.dateStr = function(date) {
@@ -101,6 +152,25 @@ Std.parseFloat = function(x) {
 }
 Std.random = function(x) {
 	return Math.floor(Math.random() * x);
+}
+var StringBuf = function() {
+	this.b = "";
+};
+StringBuf.__name__ = true;
+StringBuf.prototype = {
+	toString: function() {
+		return this.b;
+	}
+	,addSub: function(s,pos,len) {
+		this.b += HxOverrides.substr(s,pos,len);
+	}
+	,addChar: function(c) {
+		this.b += String.fromCharCode(c);
+	}
+	,add: function(x) {
+		this.b += Std.string(x);
+	}
+	,__class__: StringBuf
 }
 var js = {}
 js.Boot = function() { }
@@ -264,18 +334,33 @@ sea.Seabattle = function() { }
 sea.Seabattle.__name__ = true;
 sea.Seabattle.main = function() {
 	console.log("Hello World 4");
-	var canvas = new js.JQuery("#gameCanvas");
-	sea.Seabattle.stage = new createjs.Stage(canvas.get(0));
+	sea.Seabattle.canvas = new js.JQuery("#gameCanvas");
+	sea.Seabattle.stage = new createjs.Stage(sea.Seabattle.canvas.get(0));
+	sea.Seabattle.assets = new Hash();
+	var manifest = [{ src : "assets/ship.png", id : "ship"},{ src : "assets/water.png", id : "water"}];
+	sea.Seabattle.loader = new createjs.LoadQueue(false);
+	sea.Seabattle.loader.onFileLoad = sea.Seabattle.handleFileLoad;
+	sea.Seabattle.loader.onComplete = sea.Seabattle.setupBackground;
+	sea.Seabattle.loader.loadManifest(manifest);
 	sea.Seabattle.stage.enableDOMEvents(true);
 	sea.Seabattle.stage.enableMouseOver(10);
 	createjs.Ticker.addListener(sea.Seabattle.tick);
 	createjs.Ticker.useRAF = true;
 	createjs.Ticker.setFPS(60);
 	var prevTime = new Date().getTime();
-	sea.Seabattle.ships.push(new sea.Ship());
-	sea.Seabattle.ships.push(new sea.Ship());
-	sea.Seabattle.ships.push(new sea.Ship());
+	var s = new sea.Ship();
+	s.position = s.realPosition = { x : 0, y : 0};
+	sea.Seabattle.ships.push(s);
+	s = new sea.Ship();
+	s.position = s.realPosition = { x : 0, y : 1};
+	sea.Seabattle.ships.push(s);
+	s = new sea.Ship();
+	s.position = s.realPosition = { x : 0, y : 2};
+	sea.Seabattle.ships.push(s);
 	new js.JQuery(js.Lib.window).keypress(sea.Seabattle.keyPress);
+}
+sea.Seabattle.handleFileLoad = function(event) {
+	sea.Seabattle.assets.set(event.item.id,event.item);
 }
 sea.Seabattle.keyPress = function(event) {
 	console.log("Key " + event.which);
@@ -327,6 +412,19 @@ sea.Seabattle.tick = function() {
 sea.Seabattle.worldToScreen = function(p) {
 	return { x : (p.x + sea.Seabattle.offset.x) * sea.Seabattle.scale, y : (p.y + sea.Seabattle.offset.y) * sea.Seabattle.scale};
 }
+sea.Seabattle.setupBackground = function(e) {
+	console.log("Loading Background");
+	var water = sea.Seabattle.loader.getItem("water");
+	if(water.type == createjs.LoadQueue.IMAGE) {
+		var bmp = new createjs.Bitmap(sea.Seabattle.loader.getResult("water"));
+	}
+	console.log(Std.string(sea.Seabattle.canvas.width()) + " " + Std.string(sea.Seabattle.canvas.height()));
+	var tiles = new createjs.Shape(new createjs.Graphics().beginBitmapFill(sea.Seabattle.loader.getResult("water")).drawRect(0,0,sea.Seabattle.canvas.width(),sea.Seabattle.canvas.height()));
+	var p = sea.Seabattle.worldToScreen({ x : -0.5, y : -0.5});
+	tiles.x = p.x;
+	tiles.y = p.y;
+	sea.Seabattle.stage.addChildAt(tiles,0);
+}
 sea.Ship = function() {
 	this.time = 0.0;
 	this.angle = 0;
@@ -337,7 +435,7 @@ sea.Ship = function() {
 	this.orders = new Array();
 	if(sea.Ship.spriteSheet == null) {
 		console.log("Loading SpriteSheet");
-		sea.Ship.spriteSheet = new createjs.SpriteSheet({ images : ["assets/ship.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 64}, animations : { walk : [0,0,"idle"]}});
+		sea.Ship.spriteSheet = new createjs.SpriteSheet({ images : ["assets/ship.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 1}, animations : { walk : [0,0,"idle"]}});
 	}
 	this.bmpAnimation = new createjs.BitmapAnimation(sea.Ship.spriteSheet);
 	this.bmpAnimation.gotoAndPlay("idle");

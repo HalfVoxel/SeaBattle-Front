@@ -40,7 +40,7 @@ class Ship {
                 // image to use
                 images: ["assets/ship.png"], 
                 // width, height & registration point of each sprite
-                frames: {width: 64, height: 64, regX: 32, regY: 32, count: 64}, 
+                frames: {width: 64, height: 64, regX: 32, regY: 32, count: 1}, 
                 animations: {    
                     walk: [0, 0, "idle"]
                 }
