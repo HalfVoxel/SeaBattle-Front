@@ -12,7 +12,7 @@ import createjs.easeljs.SpriteSheet;
 import createjs.tweenjs.Ease;
 import createjs.tweenjs.Tween;
 
-class Ship {
+class Ship implements HasPosition {
     public var position : Vector2;
     public var realPosition : Vector2;
     public var realDir : Int = 0;
@@ -23,10 +23,9 @@ class Ship {
 
     static var spriteSheet : SpriteSheet;
 
-    var orders : Array<Order>;
+    public var orders : Array<Order>;
 
     var time = 0.0;
-
 
     public function new () {
         position = {x: 0, y:0};
@@ -40,9 +39,9 @@ class Ship {
                 // image to use
                 images: ["assets/ship.png"], 
                 // width, height & registration point of each sprite
-                frames: {width: 64, height: 64, regX: 32, regY: 32, count: 1}, 
+                frames: {width: 64, height: 64, regX: 32, regY: 32, count: 4}, 
                 animations: {    
-                    walk: [0, 0, "idle"]
+                    idle: [0, 3, "idle",10]
                 }
             });
         }
@@ -62,7 +61,8 @@ class Ship {
         bmpAnimation.y = 32;
         
         // have each monster start at a specific frame
-        bmpAnimation.currentFrame = 0;
+        bmpAnimation.currentAnimationFrame = cast Math.random()*spriteSheet.getNumFrames("idle");
+        trace (Math.random()*spriteSheet.getNumFrames("idle"));
         Seabattle.stage.addChild(bmpAnimation);
     }
 
@@ -79,7 +79,12 @@ class Ship {
     }
 
     public function popOrder () {
-        orders.pop();
+        if (orders.length > 0) {
+            orders.pop();
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public function simulateTime (t : Float) {
