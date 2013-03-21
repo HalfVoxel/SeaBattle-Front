@@ -25,6 +25,8 @@ class Seabattle {
     public static var targetTime : Int = 0;
     public static var time : Float = 0;
 
+    static var server = new sea.backend.Server (60,60);
+
     static var canvas : Dynamic;
 
     static var assets : Hash<Dynamic>;
@@ -34,6 +36,10 @@ class Seabattle {
 
     static var prevTime : Float = 0;
     public static var deltaTime : Float = 1/60.0;
+
+    public static var playerTurn = true;
+
+    static var timeScale = 1000;
 
     public static function getAsset (id : String) : Dynamic {
         var a = loader.getResult(id);//assets.get(id);
@@ -58,8 +64,6 @@ class Seabattle {
 
     static function main () {
 
-        trace ("Hello World 4");
-
         canvas = new js.JQuery("#gameCanvas");
 
         //canvas.width = new js.JQuery("document").width();
@@ -79,7 +83,9 @@ class Seabattle {
         var manifest = [
             {src:"assets/ship.png", id:"ship"},
             {src:"assets/water.png", id:"water"},
-            {src:"assets/marker.png", id:"marker"}
+            {src:"assets/marker.png", id:"marker"},
+            {src:"assets/island.png", id:"island"},
+            {src:"assets/projectile.png", id:"projectile"}
         ];
 
         loader = new LoadQueue(false);
@@ -119,10 +125,15 @@ class Seabattle {
             s.position = s.realPosition = {x: 0, y: i+3};
             ships.push (s);
         }
-        new js.JQuery(js.Lib.window).keypress(keyPress);
+        new js.JQuery(js.Lib.window).keydown(keyPress);
 
-        marker = new sea.Marker ({x: 5, y: 2});
+        
 
+        for (i in 0...5) {
+            var isl = new sea.Island ({x: Std.int(Math.random()*12), y: Std.int (Math.random()*12)});
+        }
+
+        marker = new sea.Marker ({x: 0, y: 0});
         selectShip (0);
     }
 
@@ -133,49 +144,109 @@ class Seabattle {
     static function keyPress (event : js.JQuery.JqEvent) {
         //trace("Key " + event.which);
         var key = event.which;
-
-        event.preventDefault ();
+        //To lowercase
+        if (key >= 65 && key <= 90) key += 97 - 65;
 
         trace ("Key " + event.which + " : " + event.charCode);
+
+        if (event.metaKey) return;
+
+        //Cannot do anything
+        if (!playerTurn) return;
 
         if (selectedShip >= 0 && selectedShip < ships.length) {
             var ship = ships[selectedShip];
             var dir = -2;
             switch (key) {
-                case 'a'.charCodeAt(0):
+                case 'a'.code:
                     dir = -1;
-                case 'd'.charCodeAt(0):
+                case 'd'.code:
                     dir = 1;
-                case 'w'.charCodeAt(0):
+                case 'w'.code:
                     dir = 0;
-                case 's'.charCodeAt(0):
+                case 's'.code:
                     dir = 2;
-                case 'f'.charCodeAt(0):
-                    
+                case 'f'.code:
                     if (ship.popOrder()) {
                         targetTime = targetTime-1;
                         createjs.tweenjs.Tween.removeTweens(Seabattle);
                         createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
                     }
+
+                    event.preventDefault ();
                     return;
-                case 'r'.charCodeAt(0):
-                    selectShip ((selectedShip+1) % ships.length);
+                case 'e'.code:
+                    dir = 1;
+                    ship.pushOrder({type: OrderType.Fire, dir: dir});
+                    return;
+                case 'q'.code:
+                    dir = -1;
+                    ship.pushOrder({type: OrderType.Fire, dir: dir});
+                    return;
+                case 'r'.code:
+                    selectShip ((selectedShip+(event.shiftKey?-1:1) + ships.length) % ships.length);
                     targetTime = ships[selectedShip].orders.length;
                     createjs.tweenjs.Tween.removeTweens(Seabattle);
                     createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
+
+                    event.preventDefault ();
                     return;
+                case ' '.code:
+                    turnOver ();
                 default:
                     return;
             }
+
+            event.preventDefault ();
+
             if (dir != -2) {
-                ship.pushOrder ({type: OrderType.Move, dir: dir});
-                targetTime = targetTime+1;
-                createjs.tweenjs.Tween.removeTweens(Seabattle);
-                createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
+                if (ship.pushOrder ({type: OrderType.Move, dir: dir})) {
+                    targetTime = targetTime+1;
+                    createjs.tweenjs.Tween.removeTweens(Seabattle);
+                    createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
+                }
             }
 
         }
         //$(window).keypress(function() { ship.keyOrder });
+    }
+
+    static function turnOver () {
+        playerTurn = false;
+        simulateMoves ();
+    }
+
+    static function simulateMoves () {
+        if (playerTurn) throw "InvalidGameState: Player turn when simulating moves.";
+
+        var maxOrders = 0;
+        for (i in 0...ships.length) {
+            maxOrders = cast Math.max (maxOrders, ships[i].orders.length);
+        }
+
+        createjs.tweenjs.Tween.removeTweens(Seabattle);
+        targetTime = maxOrders;
+        time = 0;
+        var tw1 = createjs.tweenjs.Tween.get(Seabattle);
+        var tw = tw1.to({time: targetTime}, maxOrders*timeScale);
+        tw.call (endSimulation);
+        untyped tw.addEventListener ("change", progressTime);
+
+    }
+
+    static function progressTime () {
+        for (i in 0...ships.length) {
+            ships[i].progressTime(time);
+        }
+    }
+
+    static function endSimulation () {
+        for (i in 0...ships.length) {
+            ships[i].endSimulation ();
+        }
+        time = 0;
+        targetTime = 0;
+        playerTurn = true;
     }
 
     static function tick () {
@@ -184,9 +255,6 @@ class Seabattle {
         prevTime = t;
 
         for (ship in ships) { ship.simulateTime(time); }
-
-        for (ship in ships) { ship.update(); }
-
 
         stage.update();
     }

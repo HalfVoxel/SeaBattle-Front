@@ -8,5 +8,6 @@ enum OrderType {
 
 typedef Order = {
     type : OrderType,
-    ?dir : Int
+    ?dir : Int,
+    ?executed : Bool
 }

@@ -14,6 +14,14 @@ class Vector2Utils {
         return {x: a.x-b.x, y: a.y-b.y};
     }
 
+    public static function scale (a : Vector2, b : Vector2) : Vector2 {
+        return {x: a.x*b.x, y: a.y*b.y};
+    }
+
+    public static function mult (a : Vector2, b : Float) : Vector2 {
+        return {x: a.x*b, y: a.y*b};
+    }
+
     public static function vectorFromAngle (a : Float) : Vector2 {
         return {x: Math.cos (a*2*Math.PI/360.0), y: Math.sin (a*2*Math.PI/360.0)};
     }

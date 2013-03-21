@@ -1,5 +1,10 @@
 (function () { "use strict";
 var $estr = function() { return js.Boot.__string_rec(this,''); };
+function $extend(from, fields) {
+	function inherit() {}; inherit.prototype = from; var proto = new inherit();
+	for (var name in fields) proto[name] = fields[name];
+	return proto;
+}
 var Hash = function() {
 	this.h = { };
 };
@@ -10,12 +15,10 @@ Hash.prototype = {
 	}
 	,__class__: Hash
 }
-var HxOverrides = function() { }
-HxOverrides.__name__ = true;
-HxOverrides.cca = function(s,index) {
-	var x = s.charCodeAt(index);
-	if(x != x) return undefined;
-	return x;
+var Std = function() { }
+Std.__name__ = true;
+Std.string = function(s) {
+	return js.Boot.__string_rec(s,"");
 }
 var js = {}
 js.Boot = function() { }
@@ -131,6 +134,23 @@ js.Boot.__instanceof = function(o,cl) {
 js.Lib = function() { }
 js.Lib.__name__ = true;
 var sea = {}
+sea.Island = function(p) {
+	this.position = p;
+	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset("island"));
+	this.bitmap.regX = this.bitmap.image.width / 2;
+	this.bitmap.regY = this.bitmap.image.height / 2;
+	sea.Seabattle.stage.addChildAt(this.bitmap,6);
+	this.update();
+};
+sea.Island.__name__ = true;
+sea.Island.prototype = {
+	update: function() {
+		var p = sea.Seabattle.worldToScreen(this.position);
+		this.bitmap.x = p.x;
+		this.bitmap.y = p.y;
+	}
+	,__class__: sea.Island
+}
 sea.Marker = function(p) {
 	this.position = p;
 	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset("marker"));
@@ -157,6 +177,37 @@ sea.OrderType.Move.__enum__ = sea.OrderType;
 sea.OrderType.Fire = ["Fire",1];
 sea.OrderType.Fire.toString = $estr;
 sea.OrderType.Fire.__enum__ = sea.OrderType;
+sea.Sprite = function(spriteName) {
+	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset(spriteName));
+	this.bitmap.regX = this.bitmap.image.width / 2;
+	this.bitmap.regY = this.bitmap.image.height / 2;
+	sea.Seabattle.stage.addChildAt(this.bitmap,5);
+	this.bitmap.addEventListener("tick",$bind(this,this.update));
+};
+sea.Sprite.__name__ = true;
+sea.Sprite.prototype = {
+	update: function() {
+	}
+	,__class__: sea.Sprite
+}
+sea.Projectile = function(source,dir) {
+	this.speed = 10.0;
+	sea.Sprite.call(this,"projectile");
+	this.source = source;
+	this.dir = dir;
+	this.position = sea.Vector2Utils.copy(source.position);
+};
+sea.Projectile.__name__ = true;
+sea.Projectile.__super__ = sea.Sprite;
+sea.Projectile.prototype = $extend(sea.Sprite.prototype,{
+	update: function() {
+		this.position = sea.Vector2Utils.add(this.position,sea.Vector2Utils.mult(this.dir,this.speed * sea.Seabattle.deltaTime));
+		var p = sea.Seabattle.worldToScreen(this.position);
+		this.bitmap.x = p.x;
+		this.bitmap.y = p.y;
+	}
+	,__class__: sea.Projectile
+});
 sea.Seabattle = function() { }
 sea.Seabattle.__name__ = true;
 sea.Seabattle.getAsset = function(id) {
@@ -169,13 +220,12 @@ sea.Seabattle.selectShip = function(i) {
 	if(sea.Seabattle.selectedShip >= 0 && sea.Seabattle.selectedShip < sea.Seabattle.ships.length) sea.Seabattle.marker.target = sea.Seabattle.ships[sea.Seabattle.selectedShip];
 }
 sea.Seabattle.main = function() {
-	console.log("Hello World 4");
 	sea.Seabattle.canvas = new js.JQuery("#gameCanvas");
 	sea.Seabattle.stage = new createjs.Stage(sea.Seabattle.canvas.get(0));
 	sea.Seabattle.stage.canvas.width = js.Lib.window.innerWidth;
 	sea.Seabattle.stage.canvas.height = js.Lib.window.innerHeight;
 	sea.Seabattle.assets = new Hash();
-	var manifest = [{ src : "assets/ship.png", id : "ship"},{ src : "assets/water.png", id : "water"},{ src : "assets/marker.png", id : "marker"}];
+	var manifest = [{ src : "assets/ship.png", id : "ship"},{ src : "assets/water.png", id : "water"},{ src : "assets/marker.png", id : "marker"},{ src : "assets/island.png", id : "island"},{ src : "assets/projectile.png", id : "projectile"}];
 	sea.Seabattle.loader = new createjs.LoadQueue(false);
 	sea.Seabattle.loader.onFileLoad = sea.Seabattle.handleFileLoad;
 	sea.Seabattle.loader.onComplete = sea.Seabattle.setup;
@@ -206,8 +256,13 @@ sea.Seabattle.setup = function(e) {
 		s.position = s.realPosition = { x : 0, y : i + 3};
 		sea.Seabattle.ships.push(s);
 	}
-	new js.JQuery(js.Lib.window).keypress(sea.Seabattle.keyPress);
-	sea.Seabattle.marker = new sea.Marker({ x : 5, y : 2});
+	new js.JQuery(js.Lib.window).keydown(sea.Seabattle.keyPress);
+	var _g = 0;
+	while(_g < 5) {
+		var i = _g++;
+		var isl = new sea.Island({ x : Math.random() * 12 | 0, y : Math.random() * 12 | 0});
+	}
+	sea.Seabattle.marker = new sea.Marker({ x : 0, y : 0});
 	sea.Seabattle.selectShip(0);
 }
 sea.Seabattle.handleFileLoad = function(event) {
@@ -215,47 +270,101 @@ sea.Seabattle.handleFileLoad = function(event) {
 }
 sea.Seabattle.keyPress = function(event) {
 	var key = event.which;
-	event.preventDefault();
+	if(key >= 65 && key <= 90) key += 32;
 	console.log("Key " + event.which + " : " + event.charCode);
+	if(event.metaKey) return;
+	if(!sea.Seabattle.playerTurn) return;
 	if(sea.Seabattle.selectedShip >= 0 && sea.Seabattle.selectedShip < sea.Seabattle.ships.length) {
 		var ship = sea.Seabattle.ships[sea.Seabattle.selectedShip];
 		var dir = -2;
 		switch(key) {
-		case HxOverrides.cca("a",0):
+		case 97:
 			dir = -1;
 			break;
-		case HxOverrides.cca("d",0):
+		case 100:
 			dir = 1;
 			break;
-		case HxOverrides.cca("w",0):
+		case 119:
 			dir = 0;
 			break;
-		case HxOverrides.cca("s",0):
+		case 115:
 			dir = 2;
 			break;
-		case HxOverrides.cca("f",0):
+		case 102:
 			if(ship.popOrder()) {
 				sea.Seabattle.targetTime = sea.Seabattle.targetTime - 1;
 				createjs.Tween.removeTweens(sea.Seabattle);
 				createjs.Tween.get(sea.Seabattle).to({ time : sea.Seabattle.targetTime},100);
 			}
+			event.preventDefault();
 			return;
-		case HxOverrides.cca("r",0):
-			sea.Seabattle.selectShip((sea.Seabattle.selectedShip + 1) % sea.Seabattle.ships.length);
+		case 101:
+			dir = 1;
+			ship.pushOrder({ type : sea.OrderType.Fire, dir : dir});
+			return;
+		case 113:
+			dir = -1;
+			ship.pushOrder({ type : sea.OrderType.Fire, dir : dir});
+			return;
+		case 114:
+			sea.Seabattle.selectShip((sea.Seabattle.selectedShip + (event.shiftKey?-1:1) + sea.Seabattle.ships.length) % sea.Seabattle.ships.length);
 			sea.Seabattle.targetTime = sea.Seabattle.ships[sea.Seabattle.selectedShip].orders.length;
 			createjs.Tween.removeTweens(sea.Seabattle);
 			createjs.Tween.get(sea.Seabattle).to({ time : sea.Seabattle.targetTime},100);
+			event.preventDefault();
 			return;
+		case 32:
+			sea.Seabattle.turnOver();
+			break;
 		default:
 			return;
 		}
+		event.preventDefault();
 		if(dir != -2) {
-			ship.pushOrder({ type : sea.OrderType.Move, dir : dir});
-			sea.Seabattle.targetTime = sea.Seabattle.targetTime + 1;
-			createjs.Tween.removeTweens(sea.Seabattle);
-			createjs.Tween.get(sea.Seabattle).to({ time : sea.Seabattle.targetTime},100);
+			if(ship.pushOrder({ type : sea.OrderType.Move, dir : dir})) {
+				sea.Seabattle.targetTime = sea.Seabattle.targetTime + 1;
+				createjs.Tween.removeTweens(sea.Seabattle);
+				createjs.Tween.get(sea.Seabattle).to({ time : sea.Seabattle.targetTime},100);
+			}
 		}
 	}
+}
+sea.Seabattle.turnOver = function() {
+	sea.Seabattle.playerTurn = false;
+	sea.Seabattle.simulateMoves();
+}
+sea.Seabattle.simulateMoves = function() {
+	if(sea.Seabattle.playerTurn) throw "InvalidGameState: Player turn when simulating moves.";
+	var maxOrders = 0;
+	var _g1 = 0, _g = sea.Seabattle.ships.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		maxOrders = Math.max(maxOrders,sea.Seabattle.ships[i].orders.length);
+	}
+	createjs.Tween.removeTweens(sea.Seabattle);
+	sea.Seabattle.targetTime = maxOrders;
+	sea.Seabattle.time = 0;
+	var tw1 = createjs.Tween.get(sea.Seabattle);
+	var tw = tw1.to({ time : sea.Seabattle.targetTime},maxOrders * sea.Seabattle.timeScale);
+	tw.call(sea.Seabattle.endSimulation);
+	tw.addEventListener("change",sea.Seabattle.progressTime);
+}
+sea.Seabattle.progressTime = function() {
+	var _g1 = 0, _g = sea.Seabattle.ships.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		sea.Seabattle.ships[i].progressTime(sea.Seabattle.time);
+	}
+}
+sea.Seabattle.endSimulation = function() {
+	var _g1 = 0, _g = sea.Seabattle.ships.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		sea.Seabattle.ships[i].endSimulation();
+	}
+	sea.Seabattle.time = 0;
+	sea.Seabattle.targetTime = 0;
+	sea.Seabattle.playerTurn = true;
 }
 sea.Seabattle.tick = function() {
 	var t = new Date().getTime();
@@ -266,12 +375,6 @@ sea.Seabattle.tick = function() {
 		var ship = _g1[_g];
 		++_g;
 		ship.simulateTime(sea.Seabattle.time);
-	}
-	var _g = 0, _g1 = sea.Seabattle.ships;
-	while(_g < _g1.length) {
-		var ship = _g1[_g];
-		++_g;
-		ship.update();
 	}
 	sea.Seabattle.stage.update();
 }
@@ -296,6 +399,7 @@ sea.HasPosition.prototype = {
 	__class__: sea.HasPosition
 }
 sea.Ship = function() {
+	this.maxOrderCount = 4;
 	this.angle = 0;
 	this.dir = 0;
 	this.realDir = 0;
@@ -314,6 +418,9 @@ sea.Ship = function() {
 	this.bmpAnimation.currentAnimationFrame = Math.random() * sea.Ship.spriteSheet.getNumFrames("idle");
 	console.log(Math.random() * sea.Ship.spriteSheet.getNumFrames("idle"));
 	sea.Seabattle.stage.addChild(this.bmpAnimation);
+	this.bmpAnimation.addEventListener("tick",$bind(this,this.update));
+	this.pathShape = new createjs.Shape();
+	sea.Seabattle.stage.addChildAt(this.pathShape,1);
 };
 sea.Ship.__name__ = true;
 sea.Ship.__interfaces__ = [sea.HasPosition];
@@ -323,6 +430,22 @@ sea.Ship.prototype = {
 	}
 	,dirToVector: function(dir) {
 		return sea.Ship.dirVectors[dir];
+	}
+	,progressTime: function(time) {
+		this.simulateTime(time);
+		var orderBase = Math.floor(time);
+		orderBase = orderBase > this.orders.length - 1?this.orders.length - 1:orderBase;
+		orderBase = orderBase < 0?0:orderBase;
+		if(this.orders.length > 0) {
+			var order = this.orders[orderBase];
+			if(!order.executed) {
+				order.executed = true;
+				if(order.type == sea.OrderType.Fire) {
+					console.log("Executing Order " + Std.string(order.type) + " " + orderBase);
+					new sea.Projectile(this,this.dirToVector((order.dir + this.dir + 4) % 4));
+				}
+			}
+		}
 	}
 	,simulateTime: function(t) {
 		t = t < 0?0:t;
@@ -348,7 +471,7 @@ sea.Ship.prototype = {
 		}
 		this.angle = this.dirToAngle(this.dir);
 		t -= orderBase;
-		if(t > 0.01) {
+		if(t > 0.001) {
 			var newPos = sea.Vector2Utils.copy(this.position);
 			var order = this.orders[orderBase];
 			var newDir = this.dir;
@@ -356,25 +479,46 @@ sea.Ship.prototype = {
 				if(order.dir != 0) newPos = sea.Vector2Utils.add(newPos,this.dirToVector(newDir));
 				newDir = (newDir + order.dir + 4) % 4;
 				newPos = sea.Vector2Utils.add(newPos,this.dirToVector(this.dir));
+				if(order.dir == 0) this.position = sea.Vector2Utils.lerp(this.position,newPos,t); else {
+					var rotPos = sea.Vector2Utils.add(this.position,this.dirToVector(newDir));
+					var a = this.dirToAngle((newDir + 2) % 4);
+					var b = this.dirToAngle(this.dir);
+					var aa = this.dirToAngle(this.dir);
+					var ab = this.dirToAngle(newDir);
+					if(order.dir == 1) {
+						if(b < a) b += 360;
+						if(ab < aa) ab += 360;
+						var ra = (a + (b - a) * t) % 360;
+						this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
+						this.angle = (aa + (ab - aa) * t) % 360;
+					} else {
+						if(b > a) a += 360;
+						if(ab > aa) aa += 360;
+						var ra = (a + (b - a) * t) % 360;
+						this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
+						this.angle = (aa + (ab - aa) * t) % 360;
+					}
+				}
 			}
-			if(order.dir == 0) this.position = sea.Vector2Utils.lerp(this.position,newPos,t); else {
-				var rotPos = sea.Vector2Utils.add(this.position,this.dirToVector(newDir));
-				var a = this.dirToAngle((newDir + 2) % 4);
-				var b = this.dirToAngle(this.dir);
-				var aa = this.dirToAngle(this.dir);
-				var ab = this.dirToAngle(newDir);
-				if(order.dir == 1) {
-					if(b < a) b += 360;
-					if(ab < aa) ab += 360;
-					var ra = (a + (b - a) * t) % 360;
-					this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
-					this.angle = (aa + (ab - aa) * t) % 360;
-				} else {
-					if(b > a) a += 360;
-					if(ab > aa) aa += 360;
-					var ra = (a + (b - a) * t) % 360;
-					this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
-					this.angle = (aa + (ab - aa) * t) % 360;
+		}
+	}
+	,updatePath: function() {
+		var g = this.pathShape.graphics;
+		g.clear();
+		g.setStrokeStyle(2,"round");
+		g.beginStroke(createjs.Graphics.getRGB(17,69,117));
+		this.simulateTime(0);
+		g.moveTo(sea.Seabattle.worldToScreen(this.position).x,sea.Seabattle.worldToScreen(this.position).y);
+		var _g1 = 1, _g = this.orders.length + 1;
+		while(_g1 < _g) {
+			var i = _g1++;
+			this.simulateTime(i);
+			var p = sea.Seabattle.worldToScreen(this.position);
+			var order = this.orders[i - 1];
+			if(order.type == sea.OrderType.Move && order.dir != 2) {
+				if(order.dir == 0) g.lineTo(p.x,p.y); else {
+					var rotp = sea.Seabattle.worldToScreen(sea.Vector2Utils.sub(this.position,this.dirToVector(this.dir)));
+					g.arcTo(rotp.x,rotp.y,p.x,p.y,64);
 				}
 			}
 		}
@@ -382,17 +526,28 @@ sea.Ship.prototype = {
 	,popOrder: function() {
 		if(this.orders.length > 0) {
 			this.orders.pop();
+			this.updatePath();
 			return true;
 		} else return false;
 	}
 	,pushOrder: function(order) {
-		this.orders.push(order);
+		if(this.orders.length < this.maxOrderCount) {
+			this.orders.push(order);
+			this.updatePath();
+			return true;
+		} else return false;
 	}
 	,update: function() {
 		var p = sea.Seabattle.worldToScreen(this.position);
 		this.bmpAnimation.x = p.x;
 		this.bmpAnimation.y = p.y;
 		this.bmpAnimation.rotation = this.angle + 90;
+	}
+	,endSimulation: function() {
+		this.simulateTime(this.orders.length);
+		this.orders.length = 0;
+		this.realPosition = sea.Vector2Utils.copy(this.position);
+		this.realDir = this.dir;
 	}
 	,__class__: sea.Ship
 }
@@ -403,6 +558,12 @@ sea.Vector2Utils.copy = function(p) {
 }
 sea.Vector2Utils.add = function(a,b) {
 	return { x : a.x + b.x, y : a.y + b.y};
+}
+sea.Vector2Utils.sub = function(a,b) {
+	return { x : a.x - b.x, y : a.y - b.y};
+}
+sea.Vector2Utils.mult = function(a,b) {
+	return { x : a.x * b, y : a.y * b};
 }
 sea.Vector2Utils.vectorFromAngle = function(a) {
 	return { x : Math.cos(a * 2 * Math.PI / 360.0), y : Math.sin(a * 2 * Math.PI / 360.0)};
@@ -461,6 +622,8 @@ sea.Seabattle.targetTime = 0;
 sea.Seabattle.time = 0;
 sea.Seabattle.prevTime = 0;
 sea.Seabattle.deltaTime = 1 / 60.0;
+sea.Seabattle.playerTurn = true;
+sea.Seabattle.timeScale = 1000;
 sea.Ship.dirVectors = [{ x : 1, y : 0},{ x : 0, y : 1},{ x : -1, y : 0},{ x : 0, y : -1}];
 sea.Seabattle.main();
 })();
