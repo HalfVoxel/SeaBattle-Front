@@ -21,6 +21,7 @@ class Ship implements HasPosition {
     public var realDir : Int = 0;
     public var dir : Int = 0;
     public var angle : Float = 0;
+    public var entityIndex : Int;
 
     var bmpAnimation : BitmapAnimation;
 
@@ -34,8 +35,9 @@ class Ship implements HasPosition {
 
     public var maxOrderCount = 4;
 
-    public function new () {
-        position = {x: 0, y:0};
+    public function new (entityIndex : Int) {
+        this.entityIndex = entityIndex;
+        position = new Vector2( 0,0);
         realPosition = position.copy();
         orders = new Array<Order> ();
 
@@ -47,7 +49,7 @@ class Ship implements HasPosition {
                 images: ["assets/ship.png"], 
                 // width, height & registration point of each sprite
                 frames: {width: 64, height: 64, regX: 32, regY: 32, count: 4}, 
-                animations: {    
+                animations: {
                     idle: [0, 3, "idle",10]
                 }
             });
@@ -66,16 +68,18 @@ class Ship implements HasPosition {
         bmpAnimation.name = "ShipAnim";
         bmpAnimation.x = 16;
         bmpAnimation.y = 32;
-        
+        bmpAnimation.scaleX = bmpAnimation.scaleY = 1.0/Seabattle.PIXEL_DENSITY;
+
         // have each monster start at a specific frame
         bmpAnimation.currentAnimationFrame = cast Math.random()*spriteSheet.getNumFrames("idle");
         trace (Math.random()*spriteSheet.getNumFrames("idle"));
-        Seabattle.stage.addChild(bmpAnimation);
-
+        //Seabattle.stage.addChild(bmpAnimation);
+        sea.Scene.addToLayer(bmpAnimation, 3);
         bmpAnimation.addEventListener ("tick", update);
 
         pathShape = new Shape ();
-        Seabattle.stage.addChildAt(pathShape, 1);
+        //Seabattle.stage.addChildAt(pathShape, 1);
+        sea.Scene.addToLayer(pathShape,2);
     }
 
     public function endSimulation () {
@@ -86,9 +90,8 @@ class Ship implements HasPosition {
     }
 
     public function update () {
-        var p = Seabattle.worldToScreen(position);
-        bmpAnimation.x = p.x;
-        bmpAnimation.y = p.y;
+        bmpAnimation.x = position.x;
+        bmpAnimation.y = position.y;
         bmpAnimation.rotation = angle+90;//dirToAngle(dir) + 90;
     }
 
@@ -118,24 +121,24 @@ class Ship implements HasPosition {
         var g = pathShape.graphics;
         g.clear();
 
-        g.setStrokeStyle(2,"round");
+        g.setStrokeStyle(0.05,"round");
         g.beginStroke(Graphics.getRGB(17,69,117));
         //g.beginFill(Graphics.getRGB(255,0,0));
         //g.drawCircle(0,0,3);
         
         simulateTime(0);
-        g.moveTo (Seabattle.worldToScreen(position).x,Seabattle.worldToScreen(position).y);
+        g.moveTo (position.x,position.y);
         //var prevDir = dir;
         for (i in 1...(orders.length+1)) {
             simulateTime(i);
-            var p = Seabattle.worldToScreen(position);
+            var p = position;
             var order = orders[i-1];
             if (order.type == OrderType.Move && order.dir != 2) {
                 if (order.dir == 0) {
                     g.lineTo (p.x,p.y);
                 } else {
-                    var rotp = Seabattle.worldToScreen(position.sub(dirToVector(dir)));
-                    g.arcTo (rotp.x, rotp.y, p.x,p.y, 64);
+                    var rotp = position.sub(Vector2Utils.dirToVector(dir));
+                    g.arcTo (rotp.x, rotp.y, p.x,p.y, 1);
                 }
             }
             //prevDir = dir;
@@ -167,10 +170,10 @@ class Ship implements HasPosition {
             var order = orders[i];
             if (order.type == OrderType.Move) {
                 if (order.dir != 0) {
-                    position = position.add (dirToVector(dir));
+                    position = position.add (Vector2Utils.dirToVector(dir));
                 }
                 dir = (dir+order.dir+4) % 4;
-                position = position.add (dirToVector(dir));
+                position = position.add (Vector2Utils.dirToVector(dir));
             }
         }
 
@@ -183,16 +186,16 @@ class Ship implements HasPosition {
             var newDir = dir;
             if (order.type == OrderType.Move) {
                 if (order.dir != 0) {
-                    newPos = newPos.add (dirToVector(newDir));
+                    newPos = newPos.add (Vector2Utils.dirToVector(newDir));
                 }
                 newDir = (newDir+order.dir+4) % 4;
-                newPos = newPos.add (dirToVector(dir));
+                newPos = newPos.add (Vector2Utils.dirToVector(dir));
 
                 if (order.dir == 0) {
                     position = Vector2Utils.lerp (position, newPos, t);
                 } else {
                     //Turning required
-                    var rotPos = position.add(dirToVector(newDir));
+                    var rotPos = position.add(Vector2Utils.dirToVector(newDir));
                     var a = dirToAngle ((newDir+2) % 4);
                     var b = dirToAngle (dir);
 
@@ -234,15 +237,10 @@ class Ship implements HasPosition {
                 
                 if (order.type == OrderType.Fire) {
                     trace ("Executing Order " + order.type + " " + orderBase);
-                    new Projectile (this, dirToVector((order.dir+dir+4) % 4));
+                    new Projectile (this, Vector2Utils.dirToVector((order.dir+dir+4) % 4));
                 }
             }
         }
-    }
-
-    static var dirVectors : Array<Vector2> = [{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}];
-    function dirToVector (dir : Int) {
-        return dirVectors[dir];
     }
 
     function dirToAngle (dir : Float) {

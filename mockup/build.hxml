@@ -1,7 +1,7 @@
 --js-modern 
 -js js/seabattle.js
---dead-code-elimination
+#--dead-code-elimination
 -cp Sea
 -main sea.Seabattle
 -lib createjs
--cmd open index.html
+-cmd open http://localhost:8000/index.html

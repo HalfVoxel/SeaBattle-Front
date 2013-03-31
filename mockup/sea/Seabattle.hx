@@ -18,14 +18,14 @@ class Seabattle {
     public static var stage;
 
     public static var scale = 64;
-    public static var offset = {x: 1, y: 1};
+    public static var offset = new Vector2( 1, 1);
 
     public static var selectedShip = 0;
 
     public static var targetTime : Int = 0;
     public static var time : Float = 0;
 
-    static var server = new sea.backend.Server (60,60);
+    static var server = new sea.backend.Server (30,15);
 
     static var canvas : Dynamic;
 
@@ -38,6 +38,8 @@ class Seabattle {
     public static var deltaTime : Float = 1/60.0;
 
     public static var playerTurn = true;
+
+    static public inline var PIXEL_DENSITY = 64;
 
     static var timeScale = 1000;
 
@@ -78,6 +80,8 @@ class Seabattle {
         stage.canvas.width = js.Lib.window.innerWidth;
         stage.canvas.height = js.Lib.window.innerHeight;
 
+        sea.Scene.init (stage);
+
         assets = new Hash<Dynamic> ();
 
         var manifest = [
@@ -108,35 +112,57 @@ class Seabattle {
         Ticker.setFPS(60);
         var prevTime = Date.now().getTime();
 
-        var s = new Ship();
-        s.position = s.realPosition = {x: 0, y: 0};
-        ships.push (s);
-
-        s = new Ship();
-        s.position = s.realPosition = {x: 0, y: 1};
-        ships.push (s);
-
-        s = new Ship();
-        s.position = s.realPosition = {x: 0, y: 2};
-        ships.push (s);
-
-        for (i in 0...5) {
-            s = new Ship();
-            s.position = s.realPosition = {x: 0, y: i+3};
+        /*for (i in 0...5) {
+            s = new Ship(i+3);
+            s.position = s.realPosition = new Vector2( 0, i+3);
             ships.push (s);
-        }
+        }*/
         new js.JQuery(js.Lib.window).keydown(keyPress);
 
         
 
-        for (i in 0...5) {
-            var isl = new sea.Island ({x: Std.int(Math.random()*12), y: Std.int (Math.random()*12)});
+        var tiles = server.getWorld ();
+        for (y in 0...tiles.length) {
+            for (x in 0...tiles[y].length) {
+                if (Std.is (tiles[y][x], sea.backend.Server.IslandTile)) {
+                    var island : sea.backend.Server.IslandTile = cast tiles[y][x];
+                    var isl = new sea.Island (new Vector2(x, y));        
+                    trace ("Island " + x + " " + y);
+                }
+            }
         }
 
-        marker = new sea.Marker ({x: 0, y: 0});
+        /*for (i in 0...5) {
+            var isl = new sea.Island (new Vector2( Std.int(Math.random()*12), Std.int (Math.random()*12)));
+        }*/
+
+        processResult ();
+
+        marker = new sea.Marker (new Vector2( 0, 0));
         selectShip (0);
     }
 
+    static function processResult () {
+        var result = server.getResult (0);
+        for (source in result.ships) {
+            var s = null;
+            for (ship in ships) {
+                if (ship.entityIndex == source.entityIndex) {
+                    s = ship;
+                    break;
+                }
+            }
+
+            if (s == null) {
+                trace ("Creating new ship at " + source.position);
+                s = new Ship (source.entityIndex);
+                s.realPosition = source.position.copy();
+                s.realDir = source.dir;
+                ships.push(s);
+            }
+            s.orders = source.orders;
+        }
+    }
     static function handleFileLoad(event) {
         assets.set(event.item.id, event.item);
     }
@@ -150,6 +176,22 @@ class Seabattle {
         trace ("Key " + event.which + " : " + event.charCode);
 
         if (event.metaKey) return;
+
+        switch (key) {
+            case 'i'.code:
+                offset.y += scale;
+                trace (offset.y);
+                return;
+            case 'k'.code:
+                offset.y -= scale;
+                return;
+            case 'l'.code:
+                offset.x -= scale;
+                return;
+            case 'j'.code:
+                offset.x += scale;
+                return;
+        }
 
         //Cannot do anything
         if (!playerTurn) return;
@@ -213,6 +255,13 @@ class Seabattle {
 
     static function turnOver () {
         playerTurn = false;
+
+        var turn : sea.backend.Server.PlayerTurn = new sea.backend.Server.PlayerTurn();
+        turn.playerIndex =  0;
+        turn.ships = ships;
+
+        server.processTurn (turn);
+        processResult();
         simulateMoves ();
     }
 
@@ -256,11 +305,16 @@ class Seabattle {
 
         for (ship in ships) { ship.simulateTime(time); }
 
+        stage.scaleX = scale;
+        stage.scaleY = scale;
+        stage.x = offset.x;
+        stage.y = offset.y;
         stage.update();
     }
 
     public static function worldToScreen (p : Vector2) {
-        return {x: (p.x+offset.x)*scale, y: (p.y+offset.y)*scale};
+        return p.copy();
+        //return new Vector2( (p.x+offset.x)*scale, (p.y+offset.y)*scale);
     }
 
     public static function setupBackground () {
@@ -300,10 +354,12 @@ class Seabattle {
         }
 
         var tiles = new Shape(new Graphics().beginBitmapFill(loader.getResult("water")).drawRect(0,0,canvas.width()*2,canvas.height()*2));
-        var p = worldToScreen({x:-2.5 + offset.x, y: -2.5});
+        var p = worldToScreen(new Vector2(-2.5 + offset.x, -2.5));
         tiles.x = p.x;
         tiles.y = p.y;
+        tiles.scaleX = tiles.scaleY = 1/64;
 
-        stage.addChildAt (tiles,0);
+        //stage.addChildAt (tiles,0);
+        sea.Scene.addToLayer (tiles, 0);
     }
 }

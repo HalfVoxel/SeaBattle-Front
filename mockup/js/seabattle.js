@@ -10,19 +10,198 @@ var Hash = function() {
 };
 Hash.__name__ = true;
 Hash.prototype = {
-	set: function(key,value) {
+	toString: function() {
+		var s = new StringBuf();
+		s.b += Std.string("{");
+		var it = this.keys();
+		while( it.hasNext() ) {
+			var i = it.next();
+			s.b += Std.string(i);
+			s.b += Std.string(" => ");
+			s.b += Std.string(Std.string(this.get(i)));
+			if(it.hasNext()) s.b += Std.string(", ");
+		}
+		s.b += Std.string("}");
+		return s.b;
+	}
+	,iterator: function() {
+		return { ref : this.h, it : this.keys(), hasNext : function() {
+			return this.it.hasNext();
+		}, next : function() {
+			var i = this.it.next();
+			return this.ref["$" + i];
+		}};
+	}
+	,keys: function() {
+		var a = [];
+		for( var key in this.h ) {
+		if(this.h.hasOwnProperty(key)) a.push(key.substr(1));
+		}
+		return HxOverrides.iter(a);
+	}
+	,remove: function(key) {
+		key = "$" + key;
+		if(!this.h.hasOwnProperty(key)) return false;
+		delete(this.h[key]);
+		return true;
+	}
+	,exists: function(key) {
+		return this.h.hasOwnProperty("$" + key);
+	}
+	,get: function(key) {
+		return this.h["$" + key];
+	}
+	,set: function(key,value) {
 		this.h["$" + key] = value;
 	}
 	,__class__: Hash
 }
+var HxOverrides = function() { }
+HxOverrides.__name__ = true;
+HxOverrides.dateStr = function(date) {
+	var m = date.getMonth() + 1;
+	var d = date.getDate();
+	var h = date.getHours();
+	var mi = date.getMinutes();
+	var s = date.getSeconds();
+	return date.getFullYear() + "-" + (m < 10?"0" + m:"" + m) + "-" + (d < 10?"0" + d:"" + d) + " " + (h < 10?"0" + h:"" + h) + ":" + (mi < 10?"0" + mi:"" + mi) + ":" + (s < 10?"0" + s:"" + s);
+}
+HxOverrides.strDate = function(s) {
+	switch(s.length) {
+	case 8:
+		var k = s.split(":");
+		var d = new Date();
+		d.setTime(0);
+		d.setUTCHours(k[0]);
+		d.setUTCMinutes(k[1]);
+		d.setUTCSeconds(k[2]);
+		return d;
+	case 10:
+		var k = s.split("-");
+		return new Date(k[0],k[1] - 1,k[2],0,0,0);
+	case 19:
+		var k = s.split(" ");
+		var y = k[0].split("-");
+		var t = k[1].split(":");
+		return new Date(y[0],y[1] - 1,y[2],t[0],t[1],t[2]);
+	default:
+		throw "Invalid date format : " + s;
+	}
+}
+HxOverrides.cca = function(s,index) {
+	var x = s.charCodeAt(index);
+	if(x != x) return undefined;
+	return x;
+}
+HxOverrides.substr = function(s,pos,len) {
+	if(pos != null && pos != 0 && len != null && len < 0) return "";
+	if(len == null) len = s.length;
+	if(pos < 0) {
+		pos = s.length + pos;
+		if(pos < 0) pos = 0;
+	} else if(len < 0) len = s.length + len - pos;
+	return s.substr(pos,len);
+}
+HxOverrides.remove = function(a,obj) {
+	var i = 0;
+	var l = a.length;
+	while(i < l) {
+		if(a[i] == obj) {
+			a.splice(i,1);
+			return true;
+		}
+		i++;
+	}
+	return false;
+}
+HxOverrides.iter = function(a) {
+	return { cur : 0, arr : a, hasNext : function() {
+		return this.cur < this.arr.length;
+	}, next : function() {
+		return this.arr[this.cur++];
+	}};
+}
+var IntIter = function(min,max) {
+	this.min = min;
+	this.max = max;
+};
+IntIter.__name__ = true;
+IntIter.prototype = {
+	next: function() {
+		return this.min++;
+	}
+	,hasNext: function() {
+		return this.min < this.max;
+	}
+	,__class__: IntIter
+}
 var Std = function() { }
 Std.__name__ = true;
+Std["is"] = function(v,t) {
+	return js.Boot.__instanceof(v,t);
+}
 Std.string = function(s) {
 	return js.Boot.__string_rec(s,"");
+}
+Std["int"] = function(x) {
+	return x | 0;
+}
+Std.parseInt = function(x) {
+	var v = parseInt(x,10);
+	if(v == 0 && (HxOverrides.cca(x,1) == 120 || HxOverrides.cca(x,1) == 88)) v = parseInt(x);
+	if(isNaN(v)) return null;
+	return v;
+}
+Std.parseFloat = function(x) {
+	return parseFloat(x);
+}
+Std.random = function(x) {
+	return Math.floor(Math.random() * x);
+}
+var StringBuf = function() {
+	this.b = "";
+};
+StringBuf.__name__ = true;
+StringBuf.prototype = {
+	toString: function() {
+		return this.b;
+	}
+	,addSub: function(s,pos,len) {
+		this.b += HxOverrides.substr(s,pos,len);
+	}
+	,addChar: function(c) {
+		this.b += String.fromCharCode(c);
+	}
+	,add: function(x) {
+		this.b += Std.string(x);
+	}
+	,__class__: StringBuf
 }
 var js = {}
 js.Boot = function() { }
 js.Boot.__name__ = true;
+js.Boot.__unhtml = function(s) {
+	return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+}
+js.Boot.__trace = function(v,i) {
+	var msg = i != null?i.fileName + ":" + i.lineNumber + ": ":"";
+	msg += js.Boot.__string_rec(v,"");
+	var d;
+	if(typeof(document) != "undefined" && (d = document.getElementById("haxe:trace")) != null) d.innerHTML += js.Boot.__unhtml(msg) + "<br/>"; else if(typeof(console) != "undefined" && console.log != null) console.log(msg);
+}
+js.Boot.__clear_trace = function() {
+	var d = document.getElementById("haxe:trace");
+	if(d != null) d.innerHTML = "";
+}
+js.Boot.isClass = function(o) {
+	return o.__name__;
+}
+js.Boot.isEnum = function(e) {
+	return e.__ename__;
+}
+js.Boot.getClass = function(o) {
+	return o.__class__;
+}
 js.Boot.__string_rec = function(o,s) {
 	if(o == null) return "null";
 	if(s.length >= 5) return "<...>";
@@ -131,89 +310,458 @@ js.Boot.__instanceof = function(o,cl) {
 		return o.__enum__ == cl;
 	}
 }
+js.Boot.__cast = function(o,t) {
+	if(js.Boot.__instanceof(o,t)) return o; else throw "Cannot cast " + Std.string(o) + " to " + Std.string(t);
+}
 js.Lib = function() { }
 js.Lib.__name__ = true;
+js.Lib.debug = function() {
+	debugger;
+}
+js.Lib.alert = function(v) {
+	alert(js.Boot.__string_rec(v,""));
+}
+js.Lib["eval"] = function(code) {
+	return eval(code);
+}
+js.Lib.setErrorHandler = function(f) {
+	js.Lib.onerror = f;
+}
 var sea = {}
-sea.Island = function(p) {
-	this.position = p;
-	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset("island"));
-	this.bitmap.regX = this.bitmap.image.width / 2;
-	this.bitmap.regY = this.bitmap.image.height / 2;
-	sea.Seabattle.stage.addChildAt(this.bitmap,6);
-	this.update();
-};
-sea.Island.__name__ = true;
-sea.Island.prototype = {
-	update: function() {
-		var p = sea.Seabattle.worldToScreen(this.position);
-		this.bitmap.x = p.x;
-		this.bitmap.y = p.y;
-	}
-	,__class__: sea.Island
-}
-sea.Marker = function(p) {
-	this.position = p;
-	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset("marker"));
-	this.bitmap.regX = this.bitmap.image.width / 2;
-	this.bitmap.regY = this.bitmap.image.height / 2;
-	sea.Seabattle.stage.addChildAt(this.bitmap,5);
-	this.bitmap.addEventListener("tick",$bind(this,this.update));
-};
-sea.Marker.__name__ = true;
-sea.Marker.prototype = {
-	update: function() {
-		if(this.target != null) this.position = sea.Vector2Utils.copy(this.target.position);
-		var p = sea.Seabattle.worldToScreen(this.position);
-		this.bitmap.x = p.x;
-		this.bitmap.y = p.y;
-		this.bitmap.rotation += sea.Seabattle.deltaTime * 20;
-	}
-	,__class__: sea.Marker
-}
-sea.OrderType = { __ename__ : true, __constructs__ : ["Move","Fire"] }
-sea.OrderType.Move = ["Move",0];
-sea.OrderType.Move.toString = $estr;
-sea.OrderType.Move.__enum__ = sea.OrderType;
-sea.OrderType.Fire = ["Fire",1];
-sea.OrderType.Fire.toString = $estr;
-sea.OrderType.Fire.__enum__ = sea.OrderType;
-sea.Sprite = function(spriteName) {
+sea.Sprite = function(spriteName,layer) {
 	this.bitmap = new createjs.Bitmap(sea.Seabattle.getAsset(spriteName));
 	this.bitmap.regX = this.bitmap.image.width / 2;
 	this.bitmap.regY = this.bitmap.image.height / 2;
-	sea.Seabattle.stage.addChildAt(this.bitmap,5);
+	this.bitmap.scaleX = this.bitmap.scaleY = 0.015625;
+	sea.Scene.addToLayer(this.bitmap,layer);
 	this.bitmap.addEventListener("tick",$bind(this,this.update));
 };
 sea.Sprite.__name__ = true;
 sea.Sprite.prototype = {
 	update: function() {
 	}
+	,visible: function(vis) {
+		this.bitmap.visible = vis;
+	}
 	,__class__: sea.Sprite
 }
+sea.Island = function(p) {
+	sea.Sprite.call(this,"island",2);
+	this.position = p;
+};
+sea.Island.__name__ = true;
+sea.Island.__super__ = sea.Sprite;
+sea.Island.prototype = $extend(sea.Sprite.prototype,{
+	update: function() {
+		this.bitmap.x = this.position.x;
+		this.bitmap.y = this.position.y;
+	}
+	,__class__: sea.Island
+});
+sea.Marker = function(p) {
+	this.position = p;
+	sea.Sprite.call(this,"marker",5);
+};
+sea.Marker.__name__ = true;
+sea.Marker.__super__ = sea.Sprite;
+sea.Marker.prototype = $extend(sea.Sprite.prototype,{
+	update: function() {
+		if(this.target != null) this.position = this.target.position.copy();
+		this.bitmap.x = this.position.x;
+		this.bitmap.y = this.position.y;
+		this.bitmap.rotation += sea.Seabattle.deltaTime * 20;
+	}
+	,__class__: sea.Marker
+});
+sea.OrderType = { __ename__ : true, __constructs__ : ["Move","Fire","Collide","Idle"] }
+sea.OrderType.Move = ["Move",0];
+sea.OrderType.Move.toString = $estr;
+sea.OrderType.Move.__enum__ = sea.OrderType;
+sea.OrderType.Fire = ["Fire",1];
+sea.OrderType.Fire.toString = $estr;
+sea.OrderType.Fire.__enum__ = sea.OrderType;
+sea.OrderType.Collide = ["Collide",2];
+sea.OrderType.Collide.toString = $estr;
+sea.OrderType.Collide.__enum__ = sea.OrderType;
+sea.OrderType.Idle = ["Idle",3];
+sea.OrderType.Idle.toString = $estr;
+sea.OrderType.Idle.__enum__ = sea.OrderType;
 sea.Projectile = function(source,dir) {
 	this.speed = 10.0;
-	sea.Sprite.call(this,"projectile");
+	sea.Sprite.call(this,"projectile",4);
 	this.source = source;
 	this.dir = dir;
-	this.position = sea.Vector2Utils.copy(source.position);
+	this.position = source.position.copy();
 };
 sea.Projectile.__name__ = true;
 sea.Projectile.__super__ = sea.Sprite;
 sea.Projectile.prototype = $extend(sea.Sprite.prototype,{
 	update: function() {
-		this.position = sea.Vector2Utils.add(this.position,sea.Vector2Utils.mult(this.dir,this.speed * sea.Seabattle.deltaTime));
-		var p = sea.Seabattle.worldToScreen(this.position);
-		this.bitmap.x = p.x;
-		this.bitmap.y = p.y;
+		this.position = this.position.add(this.dir.mult(this.speed * sea.Seabattle.deltaTime));
+		this.bitmap.x = this.position.x;
+		this.bitmap.y = this.position.y;
 	}
 	,__class__: sea.Projectile
 });
+sea.Scene = function() { }
+sea.Scene.__name__ = true;
+sea.Scene.init = function(stage) {
+	sea.Scene.stage = stage;
+	sea.Scene.layers = new Array();
+}
+sea.Scene.addToLayer = function(obj,layer) {
+	if(layer > 255) throw "LotsOfLayersException";
+	if(layer < 0) throw "NegativeLayerException";
+	if(layer >= sea.Scene.layers.length) {
+		var _g1 = sea.Scene.layers.length, _g = layer + 1;
+		while(_g1 < _g) {
+			var i = _g1++;
+			sea.Scene.layers.push(new createjs.Container());
+			sea.Scene.stage.addChild(sea.Scene.layers[i]);
+		}
+	}
+	sea.Scene.layers[layer].addChild(obj);
+}
+sea.Vector2 = function(x,y) {
+	this.x = x;
+	this.y = y;
+};
+sea.Vector2.__name__ = true;
+sea.Vector2.prototype = {
+	neg: function() {
+		return new sea.Vector2(-this.x,-this.y);
+	}
+	,mult: function(b) {
+		return new sea.Vector2(this.x * b,this.y * b);
+	}
+	,scale: function(b) {
+		return new sea.Vector2(this.x * b.x,this.y * b.y);
+	}
+	,sub: function(b) {
+		return new sea.Vector2(this.x - b.x,this.y - b.y);
+	}
+	,add: function(b) {
+		return new sea.Vector2(this.x + b.x,this.y + b.y);
+	}
+	,copy: function() {
+		return new sea.Vector2(this.x,this.y);
+	}
+	,__class__: sea.Vector2
+}
+sea.backend = {}
+sea.backend.Server = function(width,height) {
+	this.processedPlayers = 0;
+	this.players = 1;
+	this.width = width;
+	this.height = height;
+	this.tiles = new Array();
+	var _g = 0;
+	while(_g < height) {
+		var i = _g++;
+		var arr = new Array();
+		var _g1 = 0;
+		while(_g1 < width) {
+			var j = _g1++;
+		}
+		this.tiles.push(arr);
+	}
+	this.moves = new Array();
+	var _g = 0;
+	while(_g < 4) {
+		var i = _g++;
+		var from = new sea.Vector2(0,0);
+		var to = from.add(sea.Vector2Utils.dirToVector(i));
+		var arr = new Array();
+		var start = arr;
+		var p = from;
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2 + 1));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2 + 1));
+		arr = new Array();
+		var mid = arr;
+		p = sea.Vector2Utils.lerp(from,to,0.5);
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2 + 1));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2 + 1));
+		arr = new Array();
+		var end = arr;
+		p = to;
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2));
+		arr.push(new sea.Vector2(p.x * 2,p.y * 2 + 1));
+		arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2 + 1));
+		this.moves.push(new sea.backend.Move(to,[start,mid,end],0));
+	}
+	var gridOffsets = [new sea.Vector2(1,0),new sea.Vector2(0,1),new sea.Vector2(0,0),new sea.Vector2(0,0)];
+	var _g = 0;
+	while(_g < 4) {
+		var i = _g++;
+		var _g1 = 0;
+		while(_g1 < 2) {
+			var dir = _g1++;
+			var d = dir * 2 - 1;
+			var from = new sea.Vector2(0,0);
+			from = from.mult(2);
+			var globalDir2 = (i + d + 4) % 4;
+			var dir1 = sea.Vector2Utils.dirToVector(i).mult(2);
+			var dir2 = sea.Vector2Utils.dirToVector(globalDir2).mult(2);
+			var arr = new Array();
+			var start = arr;
+			var p = from;
+			arr.push(new sea.Vector2(p.x,p.y));
+			arr.push(new sea.Vector2(p.x + 1,p.y));
+			arr.push(new sea.Vector2(p.x,p.y + 1));
+			arr.push(new sea.Vector2(p.x + 1,p.y + 1));
+			arr = new Array();
+			var mid = arr;
+			if(this.moves.length == 4) {
+				console.log("Turn *4");
+				console.log(d + " " + globalDir2);
+				console.log(Std.string(from) + " " + Std.string(dir1) + " " + Std.string(dir2) + " ");
+			}
+			p = from.copy();
+			if(dir1.x > 0) {
+				arr.push(new sea.Vector2(p.x + dir1.x,p.y));
+				arr.push(new sea.Vector2(p.x + dir1.x,p.y + 1));
+			} else if(dir1.x < 0) {
+				arr.push(new sea.Vector2(p.x,p.y));
+				arr.push(new sea.Vector2(p.x,p.y + 1));
+			} else if(dir1.y > 0) {
+				arr.push(new sea.Vector2(p.x,p.y + dir1.y));
+				arr.push(new sea.Vector2(p.x + 1,p.y + dir1.y));
+			} else if(dir1.y < 0) {
+				arr.push(new sea.Vector2(p.x,p.y));
+				arr.push(new sea.Vector2(p.x + 1,p.y));
+			}
+			arr.push(from.add(dir1).add(gridOffsets[i]).add(gridOffsets[globalDir2]));
+			p = from.copy().add(dir1).add(dir2);
+			dir2 = dir2.neg();
+			if(dir2.x > 0) {
+				arr.push(new sea.Vector2(p.x + dir2.x,p.y));
+				arr.push(new sea.Vector2(p.x + dir2.x,p.y + 1));
+			} else if(dir2.x < 0) {
+				arr.push(new sea.Vector2(p.x,p.y));
+				arr.push(new sea.Vector2(p.x,p.y + 1));
+			} else if(dir2.y > 0) {
+				arr.push(new sea.Vector2(p.x,p.y + dir2.y));
+				arr.push(new sea.Vector2(p.x + 1,p.y + dir2.y));
+			} else if(dir2.y < 0) {
+				arr.push(new sea.Vector2(p.x,p.y));
+				arr.push(new sea.Vector2(p.x + 1,p.y));
+			}
+			var arr1 = new Array();
+			var end = arr1;
+			p = from.add(dir1).add(dir2);
+			arr1.push(new sea.Vector2(p.x,p.y));
+			arr1.push(new sea.Vector2(p.x + 1,p.y));
+			arr1.push(new sea.Vector2(p.x,p.y + 1));
+			arr1.push(new sea.Vector2(p.x + 1,p.y + 1));
+			this.moves.push(new sea.backend.Move(p.mult(0.5),[start,mid,end],d));
+		}
+	}
+	var arr = new Array();
+	var p = new sea.Vector2(0,0);
+	arr.push(new sea.Vector2(p.x * 2,p.y * 2));
+	arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2));
+	arr.push(new sea.Vector2(p.x * 2,p.y * 2 + 1));
+	arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2 + 1));
+	this.moves.push(new sea.backend.Move(p,[arr,arr,arr],0));
+	var arr = new Array();
+	var p = new sea.Vector2(0,0);
+	arr.push(new sea.Vector2(p.x * 2,p.y * 2));
+	arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2));
+	arr.push(new sea.Vector2(p.x * 2,p.y * 2 + 1));
+	arr.push(new sea.Vector2(p.x * 2 + 1,p.y * 2 + 1));
+	this.moves.push(new sea.backend.Move(p,[arr,arr,arr],2));
+	this.generateWorld();
+	console.log("Done creating world");
+};
+sea.backend.Server.__name__ = true;
+sea.backend.Server.prototype = {
+	getMove: function(ship,order) {
+		if(order.type == sea.OrderType.Idle) return this.moves[12];
+		if(order.type != sea.OrderType.Move) return null;
+		if(order.dir == 2) return this.moves[13];
+		if(order.dir == 0) return this.moves[ship.dir]; else {
+			console.log("Turn " + (4 + ship.dir * 2 + ((order.dir + 1) / 2 | 0)));
+			return this.moves[4 + ship.dir * 2 + ((order.dir + 1) / 2 | 0)];
+		}
+	}
+	,generateWorld: function() {
+		this.ships = new Array();
+		this.setTile(this.width / 4 | 0,this.height / 2 | 0,new sea.backend.IslandTile());
+		this.setTile(3 * this.width / 4 | 0,this.height / 2 | 0,new sea.backend.IslandTile());
+		this.ships.push(new sea.backend.Ship(this,0,this.ships.length,new sea.Vector2(this.width / 4 | 0,(this.height / 2 | 0) - 1)));
+		this.ships.push(new sea.backend.Ship(this,0,this.ships.length,new sea.Vector2(this.width / 4 | 0,(this.height / 2 | 0) - 2)));
+		this.collisionTiles = new Array();
+		var _g1 = 0, _g = this.width * 2;
+		while(_g1 < _g) {
+			var y = _g1++;
+			var arr = new Array();
+			var _g3 = 0, _g2 = this.height * 2;
+			while(_g3 < _g2) {
+				var x = _g3++;
+				arr.push(new sea.backend.CollisionTile());
+			}
+			this.collisionTiles.push(arr);
+		}
+	}
+	,setTile: function(x,y,tile) {
+		this.tiles[y][x] = tile;
+	}
+	,getTile: function(x,y) {
+		return this.tiles[y][x];
+	}
+	,getWorld: function() {
+		return this.tiles;
+	}
+	,getResult: function(playerIndex) {
+		var filtered = new Array();
+		var _g = 0, _g1 = this.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			if(ship.playerIndex == playerIndex) filtered.push(ship);
+		}
+		var res = { ships : filtered};
+		return res;
+	}
+	,clearCollisionMarkers: function() {
+		var _g = 0, _g1 = this.collisionTiles;
+		while(_g < _g1.length) {
+			var tilearr = _g1[_g];
+			++_g;
+			var _g2 = 0;
+			while(_g2 < tilearr.length) {
+				var tile = tilearr[_g2];
+				++_g2;
+				tile.collisionMarker = null;
+			}
+		}
+	}
+	,tryPlaceCollisionMarker: function(p,ref) {
+		var x = p.x | 0;
+		var y = p.y | 0;
+		console.log("Placing Marker at " + x + "," + y);
+		if(this.collisionTiles[y][x].collisionMarker != null) return this.collisionTiles[y][x].collisionMarker;
+		this.collisionTiles[y][x].collisionMarker = ref;
+		return null;
+	}
+	,processAllMoves: function() {
+		var maxTime = 0;
+		var _g = 0, _g1 = this.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			maxTime = maxTime > ship.orders.length?maxTime:ship.orders.length;
+		}
+		var _g = 0, _g1 = this.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			ship.initTurn();
+		}
+		var _g = 0;
+		while(_g < maxTime) {
+			var i = _g++;
+			var _g1 = 0;
+			while(_g1 < 3) {
+				var timestep = _g1++;
+				console.log("--- TIMESTEP ---");
+				this.clearCollisionMarkers();
+				var _g2 = 0, _g3 = this.ships;
+				while(_g2 < _g3.length) {
+					var ship = _g3[_g2];
+					++_g2;
+					var v = i >= ship.orders.length?{ type : sea.OrderType.Idle}:ship.orders[i];
+					ship.checkCollision(v,timestep);
+				}
+			}
+			var _g1 = 0, _g2 = this.ships;
+			while(_g1 < _g2.length) {
+				var ship = _g2[_g1];
+				++_g1;
+				var v = i >= ship.orders.length?{ type : sea.OrderType.Idle}:ship.orders[i];
+				ship.executeOrder(v);
+			}
+		}
+		var _g = 0, _g1 = this.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			ship.finalizeTurn();
+		}
+	}
+	,processTurn: function(turn) {
+		var _g = 0, _g1 = turn.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			if(ship.entityIndex < 0 || ship.entityIndex >= this.ships.length) throw "IndexOutOfRange";
+			if(this.ships[ship.entityIndex].playerIndex != turn.playerIndex) throw "InfiltrationException";
+			var serverShip = this.ships[ship.entityIndex];
+			serverShip.orders = ship.orders;
+		}
+		this.processedPlayers++;
+		if(this.processedPlayers == this.players) {
+			this.processAllMoves();
+			this.processedPlayers = 0;
+		}
+	}
+	,__class__: sea.backend.Server
+}
+sea.Vector2Utils = function() { }
+sea.Vector2Utils.__name__ = true;
+sea.Vector2Utils.vectorFromAngle = function(a) {
+	return new sea.Vector2(Math.cos(a * 2 * Math.PI / 360.0),Math.sin(a * 2 * Math.PI / 360.0));
+}
+sea.Vector2Utils.lerp = function(a,b,t) {
+	return new sea.Vector2(a.x + (b.x - a.x) * t,a.y + (b.y - a.y) * t);
+}
+sea.Vector2Utils.dirToVector = function(dir) {
+	return sea.Vector2Utils.dirVectors[dir];
+}
+sea.backend.Move = function(end,collision,dir) {
+	this.relEnd = end;
+	this.collision = collision;
+	this.dir = dir;
+};
+sea.backend.Move.__name__ = true;
+sea.backend.Move.prototype = {
+	execute: function(ship) {
+		ship.position = ship.position.add(this.relEnd);
+		ship.dir = (ship.dir + this.dir + 4) % 4;
+	}
+	,placeMarkers: function(source,timestep) {
+		var server = source.server;
+		if(timestep < 0 || timestep >= this.collision.length) throw "Out Of Time Bounds Exception";
+		var arr = this.collision[timestep];
+		var _g = 0;
+		while(_g < arr.length) {
+			var p = arr[_g];
+			++_g;
+			var v = server.tryPlaceCollisionMarker(source.position.mult(2).add(p),source);
+			if(v != null) return v;
+		}
+		return null;
+	}
+	,__class__: sea.backend.Move
+}
 sea.Seabattle = function() { }
 sea.Seabattle.__name__ = true;
 sea.Seabattle.getAsset = function(id) {
 	var a = sea.Seabattle.loader.getResult(id);
 	if(a == null) throw "Asset " + id + " has not been loaded";
 	return a;
+}
+sea.Seabattle.resize = function(event) {
+	var w = new js.JQuery("window").width();
+	var h = new js.JQuery("window").height();
+	console.log("width " + w);
+	sea.Seabattle.canvas.css("width",w + "px");
+	sea.Seabattle.canvas.css("height",h + "px");
 }
 sea.Seabattle.selectShip = function(i) {
 	sea.Seabattle.selectedShip = i;
@@ -224,6 +772,7 @@ sea.Seabattle.main = function() {
 	sea.Seabattle.stage = new createjs.Stage(sea.Seabattle.canvas.get(0));
 	sea.Seabattle.stage.canvas.width = js.Lib.window.innerWidth;
 	sea.Seabattle.stage.canvas.height = js.Lib.window.innerHeight;
+	sea.Scene.init(sea.Seabattle.stage);
 	sea.Seabattle.assets = new Hash();
 	var manifest = [{ src : "assets/ship.png", id : "ship"},{ src : "assets/water.png", id : "water"},{ src : "assets/marker.png", id : "marker"},{ src : "assets/island.png", id : "island"},{ src : "assets/projectile.png", id : "projectile"}];
 	sea.Seabattle.loader = new createjs.LoadQueue(false);
@@ -240,30 +789,50 @@ sea.Seabattle.setup = function(e) {
 	createjs.Ticker.useRAF = true;
 	createjs.Ticker.setFPS(60);
 	var prevTime = new Date().getTime();
-	var s = new sea.Ship();
-	s.position = s.realPosition = { x : 0, y : 0};
-	sea.Seabattle.ships.push(s);
-	s = new sea.Ship();
-	s.position = s.realPosition = { x : 0, y : 1};
-	sea.Seabattle.ships.push(s);
-	s = new sea.Ship();
-	s.position = s.realPosition = { x : 0, y : 2};
-	sea.Seabattle.ships.push(s);
-	var _g = 0;
-	while(_g < 5) {
-		var i = _g++;
-		s = new sea.Ship();
-		s.position = s.realPosition = { x : 0, y : i + 3};
-		sea.Seabattle.ships.push(s);
-	}
 	new js.JQuery(js.Lib.window).keydown(sea.Seabattle.keyPress);
-	var _g = 0;
-	while(_g < 5) {
-		var i = _g++;
-		var isl = new sea.Island({ x : Math.random() * 12 | 0, y : Math.random() * 12 | 0});
+	var tiles = sea.Seabattle.server.getWorld();
+	var _g1 = 0, _g = tiles.length;
+	while(_g1 < _g) {
+		var y = _g1++;
+		var _g3 = 0, _g2 = tiles[y].length;
+		while(_g3 < _g2) {
+			var x = _g3++;
+			if(js.Boot.__instanceof(tiles[y][x],sea.backend.IslandTile)) {
+				var island = tiles[y][x];
+				var isl = new sea.Island(new sea.Vector2(x,y));
+				console.log("Island " + x + " " + y);
+			}
+		}
 	}
-	sea.Seabattle.marker = new sea.Marker({ x : 0, y : 0});
+	sea.Seabattle.processResult();
+	sea.Seabattle.marker = new sea.Marker(new sea.Vector2(0,0));
 	sea.Seabattle.selectShip(0);
+}
+sea.Seabattle.processResult = function() {
+	var result = sea.Seabattle.server.getResult(0);
+	var _g = 0, _g1 = result.ships;
+	while(_g < _g1.length) {
+		var source = _g1[_g];
+		++_g;
+		var s = null;
+		var _g2 = 0, _g3 = sea.Seabattle.ships;
+		while(_g2 < _g3.length) {
+			var ship = _g3[_g2];
+			++_g2;
+			if(ship.entityIndex == source.entityIndex) {
+				s = ship;
+				break;
+			}
+		}
+		if(s == null) {
+			console.log("Creating new ship at " + Std.string(source.position));
+			s = new sea.Ship(source.entityIndex);
+			s.realPosition = source.position.copy();
+			s.realDir = source.dir;
+			sea.Seabattle.ships.push(s);
+		}
+		s.orders = source.orders;
+	}
 }
 sea.Seabattle.handleFileLoad = function(event) {
 	sea.Seabattle.assets.set(event.item.id,event.item);
@@ -273,6 +842,21 @@ sea.Seabattle.keyPress = function(event) {
 	if(key >= 65 && key <= 90) key += 32;
 	console.log("Key " + event.which + " : " + event.charCode);
 	if(event.metaKey) return;
+	switch(key) {
+	case 105:
+		sea.Seabattle.offset.y += sea.Seabattle.scale;
+		console.log(sea.Seabattle.offset.y);
+		return;
+	case 107:
+		sea.Seabattle.offset.y -= sea.Seabattle.scale;
+		return;
+	case 108:
+		sea.Seabattle.offset.x -= sea.Seabattle.scale;
+		return;
+	case 106:
+		sea.Seabattle.offset.x += sea.Seabattle.scale;
+		return;
+	}
 	if(!sea.Seabattle.playerTurn) return;
 	if(sea.Seabattle.selectedShip >= 0 && sea.Seabattle.selectedShip < sea.Seabattle.ships.length) {
 		var ship = sea.Seabattle.ships[sea.Seabattle.selectedShip];
@@ -331,6 +915,11 @@ sea.Seabattle.keyPress = function(event) {
 }
 sea.Seabattle.turnOver = function() {
 	sea.Seabattle.playerTurn = false;
+	var turn = new sea.backend.PlayerTurn();
+	turn.playerIndex = 0;
+	turn.ships = sea.Seabattle.ships;
+	sea.Seabattle.server.processTurn(turn);
+	sea.Seabattle.processResult();
 	sea.Seabattle.simulateMoves();
 }
 sea.Seabattle.simulateMoves = function() {
@@ -376,10 +965,14 @@ sea.Seabattle.tick = function() {
 		++_g;
 		ship.simulateTime(sea.Seabattle.time);
 	}
+	sea.Seabattle.stage.scaleX = sea.Seabattle.scale;
+	sea.Seabattle.stage.scaleY = sea.Seabattle.scale;
+	sea.Seabattle.stage.x = sea.Seabattle.offset.x;
+	sea.Seabattle.stage.y = sea.Seabattle.offset.y;
 	sea.Seabattle.stage.update();
 }
 sea.Seabattle.worldToScreen = function(p) {
-	return { x : (p.x + sea.Seabattle.offset.x) * sea.Seabattle.scale, y : (p.y + sea.Seabattle.offset.y) * sea.Seabattle.scale};
+	return p.copy();
 }
 sea.Seabattle.setupBackground = function() {
 	console.log("Loading Background");
@@ -388,23 +981,26 @@ sea.Seabattle.setupBackground = function() {
 		var bmp = new createjs.Bitmap(sea.Seabattle.loader.getResult("water"));
 	}
 	var tiles = new createjs.Shape(new createjs.Graphics().beginBitmapFill(sea.Seabattle.loader.getResult("water")).drawRect(0,0,sea.Seabattle.canvas.width() * 2,sea.Seabattle.canvas.height() * 2));
-	var p = sea.Seabattle.worldToScreen({ x : -2.5 + sea.Seabattle.offset.x, y : -2.5});
+	var p = sea.Seabattle.worldToScreen(new sea.Vector2(-2.5 + sea.Seabattle.offset.x,-2.5));
 	tiles.x = p.x;
 	tiles.y = p.y;
-	sea.Seabattle.stage.addChildAt(tiles,0);
+	tiles.scaleX = tiles.scaleY = 0.015625;
+	sea.Scene.addToLayer(tiles,0);
 }
 sea.HasPosition = function() { }
 sea.HasPosition.__name__ = true;
 sea.HasPosition.prototype = {
 	__class__: sea.HasPosition
 }
-sea.Ship = function() {
+sea.Ship = function(entityIndex) {
 	this.maxOrderCount = 4;
+	this.time = 0.0;
 	this.angle = 0;
 	this.dir = 0;
 	this.realDir = 0;
-	this.position = { x : 0, y : 0};
-	this.realPosition = sea.Vector2Utils.copy(this.position);
+	this.entityIndex = entityIndex;
+	this.position = new sea.Vector2(0,0);
+	this.realPosition = this.position.copy();
 	this.orders = new Array();
 	if(sea.Ship.spriteSheet == null) {
 		console.log("Loading SpriteSheet");
@@ -415,21 +1011,19 @@ sea.Ship = function() {
 	this.bmpAnimation.name = "ShipAnim";
 	this.bmpAnimation.x = 16;
 	this.bmpAnimation.y = 32;
+	this.bmpAnimation.scaleX = this.bmpAnimation.scaleY = 0.015625;
 	this.bmpAnimation.currentAnimationFrame = Math.random() * sea.Ship.spriteSheet.getNumFrames("idle");
 	console.log(Math.random() * sea.Ship.spriteSheet.getNumFrames("idle"));
-	sea.Seabattle.stage.addChild(this.bmpAnimation);
+	sea.Scene.addToLayer(this.bmpAnimation,3);
 	this.bmpAnimation.addEventListener("tick",$bind(this,this.update));
 	this.pathShape = new createjs.Shape();
-	sea.Seabattle.stage.addChildAt(this.pathShape,1);
+	sea.Scene.addToLayer(this.pathShape,2);
 };
 sea.Ship.__name__ = true;
 sea.Ship.__interfaces__ = [sea.HasPosition];
 sea.Ship.prototype = {
 	dirToAngle: function(dir) {
 		return dir * 90;
-	}
-	,dirToVector: function(dir) {
-		return sea.Ship.dirVectors[dir];
 	}
 	,progressTime: function(time) {
 		this.simulateTime(time);
@@ -442,7 +1036,7 @@ sea.Ship.prototype = {
 				order.executed = true;
 				if(order.type == sea.OrderType.Fire) {
 					console.log("Executing Order " + Std.string(order.type) + " " + orderBase);
-					new sea.Projectile(this,this.dirToVector((order.dir + this.dir + 4) % 4));
+					new sea.Projectile(this,sea.Vector2Utils.dirToVector((order.dir + this.dir + 4) % 4));
 				}
 			}
 		}
@@ -451,36 +1045,36 @@ sea.Ship.prototype = {
 		t = t < 0?0:t;
 		t = t > this.orders.length?this.orders.length:t;
 		if(t == 0) {
-			this.position = sea.Vector2Utils.copy(this.realPosition);
+			this.position = this.realPosition.copy();
 			this.dir = this.realDir;
 			this.angle = this.dirToAngle(this.dir);
 			return;
 		}
 		var orderBase = Math.floor(t);
-		this.position = sea.Vector2Utils.copy(this.realPosition);
+		this.position = this.realPosition.copy();
 		this.dir = this.realDir;
 		var _g = 0;
 		while(_g < orderBase) {
 			var i = _g++;
 			var order = this.orders[i];
 			if(order.type == sea.OrderType.Move) {
-				if(order.dir != 0) this.position = sea.Vector2Utils.add(this.position,this.dirToVector(this.dir));
+				if(order.dir != 0) this.position = this.position.add(sea.Vector2Utils.dirToVector(this.dir));
 				this.dir = (this.dir + order.dir + 4) % 4;
-				this.position = sea.Vector2Utils.add(this.position,this.dirToVector(this.dir));
+				this.position = this.position.add(sea.Vector2Utils.dirToVector(this.dir));
 			}
 		}
 		this.angle = this.dirToAngle(this.dir);
 		t -= orderBase;
 		if(t > 0.001) {
-			var newPos = sea.Vector2Utils.copy(this.position);
+			var newPos = this.position.copy();
 			var order = this.orders[orderBase];
 			var newDir = this.dir;
 			if(order.type == sea.OrderType.Move) {
-				if(order.dir != 0) newPos = sea.Vector2Utils.add(newPos,this.dirToVector(newDir));
+				if(order.dir != 0) newPos = newPos.add(sea.Vector2Utils.dirToVector(newDir));
 				newDir = (newDir + order.dir + 4) % 4;
-				newPos = sea.Vector2Utils.add(newPos,this.dirToVector(this.dir));
+				newPos = newPos.add(sea.Vector2Utils.dirToVector(this.dir));
 				if(order.dir == 0) this.position = sea.Vector2Utils.lerp(this.position,newPos,t); else {
-					var rotPos = sea.Vector2Utils.add(this.position,this.dirToVector(newDir));
+					var rotPos = this.position.add(sea.Vector2Utils.dirToVector(newDir));
 					var a = this.dirToAngle((newDir + 2) % 4);
 					var b = this.dirToAngle(this.dir);
 					var aa = this.dirToAngle(this.dir);
@@ -489,13 +1083,13 @@ sea.Ship.prototype = {
 						if(b < a) b += 360;
 						if(ab < aa) ab += 360;
 						var ra = (a + (b - a) * t) % 360;
-						this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
+						this.position = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
 						this.angle = (aa + (ab - aa) * t) % 360;
 					} else {
 						if(b > a) a += 360;
 						if(ab > aa) aa += 360;
 						var ra = (a + (b - a) * t) % 360;
-						this.position = sea.Vector2Utils.add(rotPos,sea.Vector2Utils.vectorFromAngle(ra));
+						this.position = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
 						this.angle = (aa + (ab - aa) * t) % 360;
 					}
 				}
@@ -505,20 +1099,20 @@ sea.Ship.prototype = {
 	,updatePath: function() {
 		var g = this.pathShape.graphics;
 		g.clear();
-		g.setStrokeStyle(2,"round");
+		g.setStrokeStyle(0.05,"round");
 		g.beginStroke(createjs.Graphics.getRGB(17,69,117));
 		this.simulateTime(0);
-		g.moveTo(sea.Seabattle.worldToScreen(this.position).x,sea.Seabattle.worldToScreen(this.position).y);
+		g.moveTo(this.position.x,this.position.y);
 		var _g1 = 1, _g = this.orders.length + 1;
 		while(_g1 < _g) {
 			var i = _g1++;
 			this.simulateTime(i);
-			var p = sea.Seabattle.worldToScreen(this.position);
+			var p = this.position;
 			var order = this.orders[i - 1];
 			if(order.type == sea.OrderType.Move && order.dir != 2) {
 				if(order.dir == 0) g.lineTo(p.x,p.y); else {
-					var rotp = sea.Seabattle.worldToScreen(sea.Vector2Utils.sub(this.position,this.dirToVector(this.dir)));
-					g.arcTo(rotp.x,rotp.y,p.x,p.y,64);
+					var rotp = this.position.sub(sea.Vector2Utils.dirToVector(this.dir));
+					g.arcTo(rotp.x,rotp.y,p.x,p.y,1);
 				}
 			}
 		}
@@ -538,41 +1132,91 @@ sea.Ship.prototype = {
 		} else return false;
 	}
 	,update: function() {
-		var p = sea.Seabattle.worldToScreen(this.position);
-		this.bmpAnimation.x = p.x;
-		this.bmpAnimation.y = p.y;
+		this.bmpAnimation.x = this.position.x;
+		this.bmpAnimation.y = this.position.y;
 		this.bmpAnimation.rotation = this.angle + 90;
 	}
 	,endSimulation: function() {
 		this.simulateTime(this.orders.length);
 		this.orders.length = 0;
-		this.realPosition = sea.Vector2Utils.copy(this.position);
+		this.realPosition = this.position.copy();
 		this.realDir = this.dir;
 	}
 	,__class__: sea.Ship
 }
-sea.Vector2Utils = function() { }
-sea.Vector2Utils.__name__ = true;
-sea.Vector2Utils.copy = function(p) {
-	return { x : p.x, y : p.y};
+sea.backend.PlayerTurn = function() {
+};
+sea.backend.PlayerTurn.__name__ = true;
+sea.backend.PlayerTurn.prototype = {
+	__class__: sea.backend.PlayerTurn
 }
-sea.Vector2Utils.add = function(a,b) {
-	return { x : a.x + b.x, y : a.y + b.y};
+sea.backend.CollisionTile = function() {
+};
+sea.backend.CollisionTile.__name__ = true;
+sea.backend.CollisionTile.prototype = {
+	__class__: sea.backend.CollisionTile
 }
-sea.Vector2Utils.sub = function(a,b) {
-	return { x : a.x - b.x, y : a.y - b.y};
+sea.backend.Tile = function() { }
+sea.backend.Tile.__name__ = true;
+sea.backend.IslandTile = function() {
+};
+sea.backend.IslandTile.__name__ = true;
+sea.backend.IslandTile.__super__ = sea.backend.Tile;
+sea.backend.IslandTile.prototype = $extend(sea.backend.Tile.prototype,{
+	__class__: sea.backend.IslandTile
+});
+sea.backend.Ship = function(server,playerIndex,entityIndex,initPos) {
+	this.destroyed = 0;
+	this.server = server;
+	this.playerIndex = playerIndex;
+	this.entityIndex = entityIndex;
+	this.position = initPos == null?new sea.Vector2(0,0):initPos;
+	this.dir = 0;
+	this.orders = new Array();
+};
+sea.backend.Ship.__name__ = true;
+sea.backend.Ship.prototype = {
+	onCollision: function(other,timestep) {
+		console.log("Ship " + this.entityIndex + " collided with " + other.entityIndex);
+		this.orderResult.push({ type : sea.OrderType.Collide, time : timestep / 2.0});
+		this.destroyed++;
+	}
+	,executeOrder: function(order) {
+		if(this.destroyed <= 1) {
+			this.server.getMove(this,order).execute(this);
+			this.orderResult.push(order);
+		}
+		if(this.destroyed != 0) this.destroyed++;
+	}
+	,checkCollision: function(order,timestep) {
+		if(this.destroyed != 0) return;
+		var move = this.server.getMove(this,order);
+		console.log(move);
+		console.log(order.type);
+		var colliding = move.placeMarkers(this,timestep);
+		if(colliding != null) {
+			this.onCollision(colliding,timestep);
+			colliding.onCollision(this,timestep);
+		} else {
+		}
+	}
+	,finalizeTurn: function() {
+		this.orders = this.orderResult;
+	}
+	,initTurn: function() {
+		this.orderResult = new Array();
+	}
+	,__class__: sea.backend.Ship
 }
-sea.Vector2Utils.mult = function(a,b) {
-	return { x : a.x * b, y : a.y * b};
-}
-sea.Vector2Utils.vectorFromAngle = function(a) {
-	return { x : Math.cos(a * 2 * Math.PI / 360.0), y : Math.sin(a * 2 * Math.PI / 360.0)};
-}
-sea.Vector2Utils.lerp = function(a,b,t) {
-	return { x : a.x + (b.x - a.x) * t, y : a.y + (b.y - a.y) * t};
-}
+function $iterator(o) { if( o instanceof Array ) return function() { return HxOverrides.iter(o); }; return typeof(o.iterator) == 'function' ? $bind(o,o.iterator) : o.iterator; };
 var $_;
 function $bind(o,m) { var f = function(){ return f.method.apply(f.scope, arguments); }; f.scope = o; f.method = m; return f; };
+if(Array.prototype.indexOf) HxOverrides.remove = function(a,o) {
+	var i = a.indexOf(o);
+	if(i == -1) return false;
+	a.splice(i,1);
+	return true;
+}; else null;
 Math.__name__ = ["Math"];
 Math.NaN = Number.NaN;
 Math.NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
@@ -597,6 +1241,7 @@ var Bool = Boolean;
 Bool.__ename__ = ["Bool"];
 var Class = { __name__ : ["Class"]};
 var Enum = { };
+var Void = { __ename__ : ["Void"]};
 if(typeof($) == 'undefined') {
 	/*! jQuery v1.6.4 http://jquery.com/ | http://jquery.org/license */
 (function(a,b){function cu(a){return f.isWindow(a)?a:a.nodeType===9?a.defaultView||a.parentWindow:!1}function cr(a){if(!cg[a]){var b=c.body,d=f("<"+a+">").appendTo(b),e=d.css("display");d.remove();if(e==="none"||e===""){ch||(ch=c.createElement("iframe"),ch.frameBorder=ch.width=ch.height=0),b.appendChild(ch);if(!ci||!ch.createElement)ci=(ch.contentWindow||ch.contentDocument).document,ci.write((c.compatMode==="CSS1Compat"?"<!doctype html>":"")+"<html><body>"),ci.close();d=ci.createElement(a),ci.body.appendChild(d),e=f.css(d,"display"),b.removeChild(ch)}cg[a]=e}return cg[a]}function cq(a,b){var c={};f.each(cm.concat.apply([],cm.slice(0,b)),function(){c[this]=a});return c}function cp(){cn=b}function co(){setTimeout(cp,0);return cn=f.now()}function cf(){try{return new a.ActiveXObject("Microsoft.XMLHTTP")}catch(b){}}function ce(){try{return new a.XMLHttpRequest}catch(b){}}function b$(a,c){a.dataFilter&&(c=a.dataFilter(c,a.dataType));var d=a.dataTypes,e={},g,h,i=d.length,j,k=d[0],l,m,n,o,p;for(g=1;g<i;g++){if(g===1)for(h in a.converters)typeof h=="string"&&(e[h.toLowerCase()]=a.converters[h]);l=k,k=d[g];if(k==="*")k=l;else if(l!=="*"&&l!==k){m=l+" "+k,n=e[m]||e["* "+k];if(!n){p=b;for(o in e){j=o.split(" ");if(j[0]===l||j[0]==="*"){p=e[j[1]+" "+k];if(p){o=e[o],o===!0?n=p:p===!0&&(n=o);break}}}}!n&&!p&&f.error("No conversion from "+m.replace(" "," to ")),n!==!0&&(c=n?n(c):p(o(c)))}}return c}function bZ(a,c,d){var e=a.contents,f=a.dataTypes,g=a.responseFields,h,i,j,k;for(i in g)i in d&&(c[g[i]]=d[i]);while(f[0]==="*")f.shift(),h===b&&(h=a.mimeType||c.getResponseHeader("content-type"));if(h)for(i in e)if(e[i]&&e[i].test(h)){f.unshift(i);break}if(f[0]in d)j=f[0];else{for(i in d){if(!f[0]||a.converters[i+" "+f[0]]){j=i;break}k||(k=i)}j=j||k}if(j){j!==f[0]&&f.unshift(j);return d[j]}}function bY(a,b,c,d){if(f.isArray(b))f.each(b,function(b,e){c||bA.test(a)?d(a,e):bY(a+"["+(typeof e=="object"||f.isArray(e)?b:"")+"]",e,c,d)});else if(!c&&b!=null&&typeof b=="object")for(var e in b)bY(a+"["+e+"]",b[e],c,d);else d(a,b)}function bX(a,c){var d,e,g=f.ajaxSettings.flatOptions||{};for(d in c)c[d]!==b&&((g[d]?a:e||(e={}))[d]=c[d]);e&&f.extend(!0,a,e)}function bW(a,c,d,e,f,g){f=f||c.dataTypes[0],g=g||{},g[f]=!0;var h=a[f],i=0,j=h?h.length:0,k=a===bP,l;for(;i<j&&(k||!l);i++)l=h[i](c,d,e),typeof l=="string"&&(!k||g[l]?l=b:(c.dataTypes.unshift(l),l=bW(a,c,d,e,l,g)));(k||!l)&&!g["*"]&&(l=bW(a,c,d,e,"*",g));return l}function bV(a){return function(b,c){typeof b!="string"&&(c=b,b="*");if(f.isFunction(c)){var d=b.toLowerCase().split(bL),e=0,g=d.length,h,i,j;for(;e<g;e++)h=d[e],j=/^\+/.test(h),j&&(h=h.substr(1)||"*"),i=a[h]=a[h]||[],i[j?"unshift":"push"](c)}}}function by(a,b,c){var d=b==="width"?a.offsetWidth:a.offsetHeight,e=b==="width"?bt:bu;if(d>0){c!=="border"&&f.each(e,function(){c||(d-=parseFloat(f.css(a,"padding"+this))||0),c==="margin"?d+=parseFloat(f.css(a,c+this))||0:d-=parseFloat(f.css(a,"border"+this+"Width"))||0});return d+"px"}d=bv(a,b,b);if(d<0||d==null)d=a.style[b]||0;d=parseFloat(d)||0,c&&f.each(e,function(){d+=parseFloat(f.css(a,"padding"+this))||0,c!=="padding"&&(d+=parseFloat(f.css(a,"border"+this+"Width"))||0),c==="margin"&&(d+=parseFloat(f.css(a,c+this))||0)});return d+"px"}function bl(a,b){b.src?f.ajax({url:b.src,async:!1,dataType:"script"}):f.globalEval((b.text||b.textContent||b.innerHTML||"").replace(bd,"/*$0*/")),b.parentNode&&b.parentNode.removeChild(b)}function bk(a){f.nodeName(a,"input")?bj(a):"getElementsByTagName"in a&&f.grep(a.getElementsByTagName("input"),bj)}function bj(a){if(a.type==="checkbox"||a.type==="radio")a.defaultChecked=a.checked}function bi(a){return"getElementsByTagName"in a?a.getElementsByTagName("*"):"querySelectorAll"in a?a.querySelectorAll("*"):[]}function bh(a,b){var c;if(b.nodeType===1){b.clearAttributes&&b.clearAttributes(),b.mergeAttributes&&b.mergeAttributes(a),c=b.nodeName.toLowerCase();if(c==="object")b.outerHTML=a.outerHTML;else if(c!=="input"||a.type!=="checkbox"&&a.type!=="radio"){if(c==="option")b.selected=a.defaultSelected;else if(c==="input"||c==="textarea")b.defaultValue=a.defaultValue}else a.checked&&(b.defaultChecked=b.checked=a.checked),b.value!==a.value&&(b.value=a.value);b.removeAttribute(f.expando)}}function bg(a,b){if(b.nodeType===1&&!!f.hasData(a)){var c=f.expando,d=f.data(a),e=f.data(b,d);if(d=d[c]){var g=d.events;e=e[c]=f.extend({},d);if(g){delete e.handle,e.events={};for(var h in g)for(var i=0,j=g[h].length;i<j;i++)f.event.add(b,h+(g[h][i].namespace?".":"")+g[h][i].namespace,g[h][i],g[h][i].data)}}}}function bf(a,b){return f.nodeName(a,"table")?a.getElementsByTagName("tbody")[0]||a.appendChild(a.ownerDocument.createElement("tbody")):a}function V(a,b,c){b=b||0;if(f.isFunction(b))return f.grep(a,function(a,d){var e=!!b.call(a,d,a);return e===c});if(b.nodeType)return f.grep(a,function(a,d){return a===b===c});if(typeof b=="string"){var d=f.grep(a,function(a){return a.nodeType===1});if(Q.test(b))return f.filter(b,d,!c);b=f.filter(b,d)}return f.grep(a,function(a,d){return f.inArray(a,b)>=0===c})}function U(a){return!a||!a.parentNode||a.parentNode.nodeType===11}function M(a,b){return(a&&a!=="*"?a+".":"")+b.replace(y,"`").replace(z,"&")}function L(a){var b,c,d,e,g,h,i,j,k,l,m,n,o,p=[],q=[],r=f._data(this,"events");if(!(a.liveFired===this||!r||!r.live||a.target.disabled||a.button&&a.type==="click")){a.namespace&&(n=new RegExp("(^|\\.)"+a.namespace.split(".").join("\\.(?:.*\\.)?")+"(\\.|$)")),a.liveFired=this;var s=r.live.slice(0);for(i=0;i<s.length;i++)g=s[i],g.origType.replace(w,"")===a.type?q.push(g.selector):s.splice(i--,1);e=f(a.target).closest(q,a.currentTarget);for(j=0,k=e.length;j<k;j++){m=e[j];for(i=0;i<s.length;i++){g=s[i];if(m.selector===g.selector&&(!n||n.test(g.namespace))&&!m.elem.disabled){h=m.elem,d=null;if(g.preType==="mouseenter"||g.preType==="mouseleave")a.type=g.preType,d=f(a.relatedTarget).closest(g.selector)[0],d&&f.contains(h,d)&&(d=h);(!d||d!==h)&&p.push({elem:h,handleObj:g,level:m.level})}}}for(j=0,k=p.length;j<k;j++){e=p[j];if(c&&e.level>c)break;a.currentTarget=e.elem,a.data=e.handleObj.data,a.handleObj=e.handleObj,o=e.handleObj.origHandler.apply(e.elem,arguments);if(o===!1||a.isPropagationStopped()){c=e.level,o===!1&&(b=!1);if(a.isImmediatePropagationStopped())break}}return b}}function J(a,c,d){var e=f.extend({},d[0]);e.type=a,e.originalEvent={},e.liveFired=b,f.event.handle.call(c,e),e.isDefaultPrevented()&&d[0].preventDefault()}function D(){return!0}function C(){return!1}function m(a,c,d){var e=c+"defer",g=c+"queue",h=c+"mark",i=f.data(a,e,b,!0);i&&(d==="queue"||!f.data(a,g,b,!0))&&(d==="mark"||!f.data(a,h,b,!0))&&setTimeout(function(){!f.data(a,g,b,!0)&&!f.data(a,h,b,!0)&&(f.removeData(a,e,!0),i.resolve())},0)}function l(a){for(var b in a)if(b!=="toJSON")return!1;return!0}function k(a,c,d){if(d===b&&a.nodeType===1){var e="data-"+c.replace(j,"-$1").toLowerCase();d=a.getAttribute(e);if(typeof d=="string"){try{d=d==="true"?!0:d==="false"?!1:d==="null"?null:f.isNaN(d)?i.test(d)?f.parseJSON(d):d:parseFloat(d)}catch(g){}f.data(a,c,d)}else d=b}return d}var c=a.document,d=a.navigator,e=a.location,f=function(){function K(){if(!e.isReady){try{c.documentElement.doScroll("left")}catch(a){setTimeout(K,1);return}e.ready()}}var e=function(a,b){return new e.fn.init(a,b,h)},f=a.jQuery,g=a.$,h,i=/^(?:[^#<]*(<[\w\W]+>)[^>]*$|#([\w\-]*)$)/,j=/\S/,k=/^\s+/,l=/\s+$/,m=/\d/,n=/^<(\w+)\s*\/?>(?:<\/\1>)?$/,o=/^[\],:{}\s]*$/,p=/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,q=/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g,r=/(?:^|:|,)(?:\s*\[)+/g,s=/(webkit)[ \/]([\w.]+)/,t=/(opera)(?:.*version)?[ \/]([\w.]+)/,u=/(msie) ([\w.]+)/,v=/(mozilla)(?:.*? rv:([\w.]+))?/,w=/-([a-z]|[0-9])/ig,x=/^-ms-/,y=function(a,b){return(b+"").toUpperCase()},z=d.userAgent,A,B,C,D=Object.prototype.toString,E=Object.prototype.hasOwnProperty,F=Array.prototype.push,G=Array.prototype.slice,H=String.prototype.trim,I=Array.prototype.indexOf,J={};e.fn=e.prototype={constructor:e,init:function(a,d,f){var g,h,j,k;if(!a)return this;if(a.nodeType){this.context=this[0]=a,this.length=1;return this}if(a==="body"&&!d&&c.body){this.context=c,this[0]=c.body,this.selector=a,this.length=1;return this}if(typeof a=="string"){a.charAt(0)!=="<"||a.charAt(a.length-1)!==">"||a.length<3?g=i.exec(a):g=[null,a,null];if(g&&(g[1]||!d)){if(g[1]){d=d instanceof e?d[0]:d,k=d?d.ownerDocument||d:c,j=n.exec(a),j?e.isPlainObject(d)?(a=[c.createElement(j[1])],e.fn.attr.call(a,d,!0)):a=[k.createElement(j[1])]:(j=e.buildFragment([g[1]],[k]),a=(j.cacheable?e.clone(j.fragment):j.fragment).childNodes);return e.merge(this,a)}h=c.getElementById(g[2]);if(h&&h.parentNode){if(h.id!==g[2])return f.find(a);this.length=1,this[0]=h}this.context=c,this.selector=a;return this}return!d||d.jquery?(d||f).find(a):this.constructor(d).find(a)}if(e.isFunction(a))return f.ready(a);a.selector!==b&&(this.selector=a.selector,this.context=a.context);return e.makeArray(a,this)},selector:"",jquery:"1.6.4",length:0,size:function(){return this.length},toArray:function(){return G.call(this,0)},get:function(a){return a==null?this.toArray():a<0?this[this.length+a]:this[a]},pushStack:function(a,b,c){var d=this.constructor();e.isArray(a)?F.apply(d,a):e.merge(d,a),d.prevObject=this,d.context=this.context,b==="find"?d.selector=this.selector+(this.selector?" ":"")+c:b&&(d.selector=this.selector+"."+b+"("+c+")");return d},each:function(a,b){return e.each(this,a,b)},ready:function(a){e.bindReady(),B.done(a);return this},eq:function(a){return a===-1?this.slice(a):this.slice(a,+a+1)},first:function(){return this.eq(0)},last:function(){return this.eq(-1)},slice:function(){return this.pushStack(G.apply(this,arguments),"slice",G.call(arguments).join(","))},map:function(a){return this.pushStack(e.map(this,function(b,c){return a.call(b,c,b)}))},end:function(){return this.prevObject||this.constructor(null)},push:F,sort:[].sort,splice:[].splice},e.fn.init.prototype=e.fn,e.extend=e.fn.extend=function(){var a,c,d,f,g,h,i=arguments[0]||{},j=1,k=arguments.length,l=!1;typeof i=="boolean"&&(l=i,i=arguments[1]||{},j=2),typeof i!="object"&&!e.isFunction(i)&&(i={}),k===j&&(i=this,--j);for(;j<k;j++)if((a=arguments[j])!=null)for(c in a){d=i[c],f=a[c];if(i===f)continue;l&&f&&(e.isPlainObject(f)||(g=e.isArray(f)))?(g?(g=!1,h=d&&e.isArray(d)?d:[]):h=d&&e.isPlainObject(d)?d:{},i[c]=e.extend(l,h,f)):f!==b&&(i[c]=f)}return i},e.extend({noConflict:function(b){a.$===e&&(a.$=g),b&&a.jQuery===e&&(a.jQuery=f);return e},isReady:!1,readyWait:1,holdReady:function(a){a?e.readyWait++:e.ready(!0)},ready:function(a){if(a===!0&&!--e.readyWait||a!==!0&&!e.isReady){if(!c.body)return setTimeout(e.ready,1);e.isReady=!0;if(a!==!0&&--e.readyWait>0)return;B.resolveWith(c,[e]),e.fn.trigger&&e(c).trigger("ready").unbind("ready")}},bindReady:function(){if(!B){B=e._Deferred();if(c.readyState==="complete")return setTimeout(e.ready,1);if(c.addEventListener)c.addEventListener("DOMContentLoaded",C,!1),a.addEventListener("load",e.ready,!1);else if(c.attachEvent){c.attachEvent("onreadystatechange",C),a.attachEvent("onload",e.ready);var b=!1;try{b=a.frameElement==null}catch(d){}c.documentElement.doScroll&&b&&K()}}},isFunction:function(a){return e.type(a)==="function"},isArray:Array.isArray||function(a){return e.type(a)==="array"},isWindow:function(a){return a&&typeof a=="object"&&"setInterval"in a},isNaN:function(a){return a==null||!m.test(a)||isNaN(a)},type:function(a){return a==null?String(a):J[D.call(a)]||"object"},isPlainObject:function(a){if(!a||e.type(a)!=="object"||a.nodeType||e.isWindow(a))return!1;try{if(a.constructor&&!E.call(a,"constructor")&&!E.call(a.constructor.prototype,"isPrototypeOf"))return!1}catch(c){return!1}var d;for(d in a);return d===b||E.call(a,d)},isEmptyObject:function(a){for(var b in a)return!1;return!0},error:function(a){throw a},parseJSON:function(b){if(typeof b!="string"||!b)return null;b=e.trim(b);if(a.JSON&&a.JSON.parse)return a.JSON.parse(b);if(o.test(b.replace(p,"@").replace(q,"]").replace(r,"")))return(new Function("return "+b))();e.error("Invalid JSON: "+b)},parseXML:function(c){var d,f;try{a.DOMParser?(f=new DOMParser,d=f.parseFromString(c,"text/xml")):(d=new ActiveXObject("Microsoft.XMLDOM"),d.async="false",d.loadXML(c))}catch(g){d=b}(!d||!d.documentElement||d.getElementsByTagName("parsererror").length)&&e.error("Invalid XML: "+c);return d},noop:function(){},globalEval:function(b){b&&j.test(b)&&(a.execScript||function(b){a.eval.call(a,b)})(b)},camelCase:function(a){return a.replace(x,"ms-").replace(w,y)},nodeName:function(a,b){return a.nodeName&&a.nodeName.toUpperCase()===b.toUpperCase()},each:function(a,c,d){var f,g=0,h=a.length,i=h===b||e.isFunction(a);if(d){if(i){for(f in a)if(c.apply(a[f],d)===!1)break}else for(;g<h;)if(c.apply(a[g++],d)===!1)break}else if(i){for(f in a)if(c.call(a[f],f,a[f])===!1)break}else for(;g<h;)if(c.call(a[g],g,a[g++])===!1)break;return a},trim:H?function(a){return a==null?"":H.call(a)}:function(a){return a==null?"":(a+"").replace(k,"").replace(l,"")},makeArray:function(a,b){var c=b||[];if(a!=null){var d=e.type(a);a.length==null||d==="string"||d==="function"||d==="regexp"||e.isWindow(a)?F.call(c,a):e.merge(c,a)}return c},inArray:function(a,b){if(!b)return-1;if(I)return I.call(b,a);for(var c=0,d=b.length;c<d;c++)if(b[c]===a)return c;return-1},merge:function(a,c){var d=a.length,e=0;if(typeof c.length=="number")for(var f=c.length;e<f;e++)a[d++]=c[e];else while(c[e]!==b)a[d++]=c[e++];a.length=d;return a},grep:function(a,b,c){var d=[],e;c=!!c;for(var f=0,g=a.length;f<g;f++)e=!!b(a[f],f),c!==e&&d.push(a[f]);return d},map:function(a,c,d){var f,g,h=[],i=0,j=a.length,k=a instanceof e||j!==b&&typeof j=="number"&&(j>0&&a[0]&&a[j-1]||j===0||e.isArray(a));if(k)for(;i<j;i++)f=c(a[i],i,d),f!=null&&(h[h.length]=f);else for(g in a)f=c(a[g],g,d),f!=null&&(h[h.length]=f);return h.concat.apply([],h)},guid:1,proxy:function(a,c){if(typeof c=="string"){var d=a[c];c=a,a=d}if(!e.isFunction(a))return b;var f=G.call(arguments,2),g=function(){return a.apply(c,f.concat(G.call(arguments)))};g.guid=a.guid=a.guid||g.guid||e.guid++;return g},access:function(a,c,d,f,g,h){var i=a.length;if(typeof c=="object"){for(var j in c)e.access(a,j,c[j],f,g,d);return a}if(d!==b){f=!h&&f&&e.isFunction(d);for(var k=0;k<i;k++)g(a[k],c,f?d.call(a[k],k,g(a[k],c)):d,h);return a}return i?g(a[0],c):b},now:function(){return(new Date).getTime()},uaMatch:function(a){a=a.toLowerCase();var b=s.exec(a)||t.exec(a)||u.exec(a)||a.indexOf("compatible")<0&&v.exec(a)||[];return{browser:b[1]||"",version:b[2]||"0"}},sub:function(){function a(b,c){return new a.fn.init(b,c)}e.extend(!0,a,this),a.superclass=this,a.fn=a.prototype=this(),a.fn.constructor=a,a.sub=this.sub,a.fn.init=function(d,f){f&&f instanceof e&&!(f instanceof a)&&(f=a(f));return e.fn.init.call(this,d,f,b)},a.fn.init.prototype=a.fn;var b=a(c);return a},browser:{}}),e.each("Boolean Number String Function Array Date RegExp Object".split(" "),function(a,b){J["[object "+b+"]"]=b.toLowerCase()}),A=e.uaMatch(z),A.browser&&(e.browser[A.browser]=!0,e.browser.version=A.version),e.browser.webkit&&(e.browser.safari=!0),j.test(" ")&&(k=/^[\s\xA0]+/,l=/[\s\xA0]+$/),h=e(c),c.addEventListener?C=function(){c.removeEventListener("DOMContentLoaded",C,!1),e.ready()}:c.attachEvent&&(C=function(){c.readyState==="complete"&&(c.detachEvent("onreadystatechange",C),e.ready())});return e}(),g="done fail isResolved isRejected promise then always pipe".split(" "),h=[].slice;f.extend({_Deferred:function(){var a=[],b,c,d,e={done:function(){if(!d){var c=arguments,g,h,i,j,k;b&&(k=b,b=0);for(g=0,h=c.length;g<h;g++)i=c[g],j=f.type(i),j==="array"?e.done.apply(e,i):j==="function"&&a.push(i);k&&e.resolveWith(k[0],k[1])}return this},resolveWith:function(e,f){if(!d&&!b&&!c){f=f||[],c=1;try{while(a[0])a.shift().apply(e,f)}finally{b=[e,f],c=0}}return this},resolve:function(){e.resolveWith(this,arguments);return this},isResolved:function(){return!!c||!!b},cancel:function(){d=1,a=[];return this}};return e},Deferred:function(a){var b=f._Deferred(),c=f._Deferred(),d;f.extend(b,{then:function(a,c){b.done(a).fail(c);return this},always:function(){return b.done.apply(b,arguments).fail.apply(this,arguments)},fail:c.done,rejectWith:c.resolveWith,reject:c.resolve,isRejected:c.isResolved,pipe:function(a,c){return f.Deferred(function(d){f.each({done:[a,"resolve"],fail:[c,"reject"]},function(a,c){var e=c[0],g=c[1],h;f.isFunction(e)?b[a](function(){h=e.apply(this,arguments),h&&f.isFunction(h.promise)?h.promise().then(d.resolve,d.reject):d[g+"With"](this===b?d:this,[h])}):b[a](d[g])})}).promise()},promise:function(a){if(a==null){if(d)return d;d=a={}}var c=g.length;while(c--)a[g[c]]=b[g[c]];return a}}),b.done(c.cancel).fail(b.cancel),delete b.cancel,a&&a.call(b,b);return b},when:function(a){function i(a){return function(c){b[a]=arguments.length>1?h.call(arguments,0):c,--e||g.resolveWith(g,h.call(b,0))}}var b=arguments,c=0,d=b.length,e=d,g=d<=1&&a&&f.isFunction(a.promise)?a:f.Deferred();if(d>1){for(;c<d;c++)b[c]&&f.isFunction(b[c].promise)?b[c].promise().then(i(c),g.reject):--e;e||g.resolveWith(g,b)}else g!==a&&g.resolveWith(g,d?[a]:[]);return g.promise()}}),f.support=function(){var a=c.createElement("div"),b=c.documentElement,d,e,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u;a.setAttribute("className","t"),a.innerHTML="   <link/><table></table><a href='/a' style='top:1px;float:left;opacity:.55;'>a</a><input type='checkbox'/>",d=a.getElementsByTagName("*"),e=a.getElementsByTagName("a")[0];if(!d||!d.length||!e)return{};g=c.createElement("select"),h=g.appendChild(c.createElement("option")),i=a.getElementsByTagName("input")[0],k={leadingWhitespace:a.firstChild.nodeType===3,tbody:!a.getElementsByTagName("tbody").length,htmlSerialize:!!a.getElementsByTagName("link").length,style:/top/.test(e.getAttribute("style")),hrefNormalized:e.getAttribute("href")==="/a",opacity:/^0.55$/.test(e.style.opacity),cssFloat:!!e.style.cssFloat,checkOn:i.value==="on",optSelected:h.selected,getSetAttribute:a.className!=="t",submitBubbles:!0,changeBubbles:!0,focusinBubbles:!1,deleteExpando:!0,noCloneEvent:!0,inlineBlockNeedsLayout:!1,shrinkWrapBlocks:!1,reliableMarginRight:!0},i.checked=!0,k.noCloneChecked=i.cloneNode(!0).checked,g.disabled=!0,k.optDisabled=!h.disabled;try{delete a.test}catch(v){k.deleteExpando=!1}!a.addEventListener&&a.attachEvent&&a.fireEvent&&(a.attachEvent("onclick",function(){k.noCloneEvent=!1}),a.cloneNode(!0).fireEvent("onclick")),i=c.createElement("input"),i.value="t",i.setAttribute("type","radio"),k.radioValue=i.value==="t",i.setAttribute("checked","checked"),a.appendChild(i),l=c.createDocumentFragment(),l.appendChild(a.firstChild),k.checkClone=l.cloneNode(!0).cloneNode(!0).lastChild.checked,a.innerHTML="",a.style.width=a.style.paddingLeft="1px",m=c.getElementsByTagName("body")[0],o=c.createElement(m?"div":"body"),p={visibility:"hidden",width:0,height:0,border:0,margin:0,background:"none"},m&&f.extend(p,{position:"absolute",left:"-1000px",top:"-1000px"});for(t in p)o.style[t]=p[t];o.appendChild(a),n=m||b,n.insertBefore(o,n.firstChild),k.appendChecked=i.checked,k.boxModel=a.offsetWidth===2,"zoom"in a.style&&(a.style.display="inline",a.style.zoom=1,k.inlineBlockNeedsLayout=a.offsetWidth===2,a.style.display="",a.innerHTML="<div style='width:4px;'></div>",k.shrinkWrapBlocks=a.offsetWidth!==2),a.innerHTML="<table><tr><td style='padding:0;border:0;display:none'></td><td>t</td></tr></table>",q=a.getElementsByTagName("td"),u=q[0].offsetHeight===0,q[0].style.display="",q[1].style.display="none",k.reliableHiddenOffsets=u&&q[0].offsetHeight===0,a.innerHTML="",c.defaultView&&c.defaultView.getComputedStyle&&(j=c.createElement("div"),j.style.width="0",j.style.marginRight="0",a.appendChild(j),k.reliableMarginRight=(parseInt((c.defaultView.getComputedStyle(j,null)||{marginRight:0}).marginRight,10)||0)===0),o.innerHTML="",n.removeChild(o);if(a.attachEvent)for(t in{submit:1,change:1,focusin:1})s="on"+t,u=s in a,u||(a.setAttribute(s,"return;"),u=typeof a[s]=="function"),k[t+"Bubbles"]=u;o=l=g=h=m=j=a=i=null;return k}(),f.boxModel=f.support.boxModel;var i=/^(?:\{.*\}|\[.*\])$/,j=/([A-Z])/g;f.extend({cache:{},uuid:0,expando:"jQuery"+(f.fn.jquery+Math.random()).replace(/\D/g,""),noData:{embed:!0,object:"clsid:D27CDB6E-AE6D-11cf-96B8-444553540000",applet:!0},hasData:function(a){a=a.nodeType?f.cache[a[f.expando]]:a[f.expando];return!!a&&!l(a)},data:function(a,c,d,e){if(!!f.acceptData(a)){var g,h,i=f.expando,j=typeof c=="string",k=a.nodeType,l=k?f.cache:a,m=k?a[f.expando]:a[f.expando]&&f.expando;if((!m||e&&m&&l[m]&&!l[m][i])&&j&&d===b)return;m||(k?a[f.expando]=m=++f.uuid:m=f.expando),l[m]||(l[m]={},k||(l[m].toJSON=f.noop));if(typeof c=="object"||typeof c=="function")e?l[m][i]=f.extend(l[m][i],c):l[m]=f.extend(l[m],c);g=l[m],e&&(g[i]||(g[i]={}),g=g[i]),d!==b&&(g[f.camelCase(c)]=d);if(c==="events"&&!g[c])return g[i]&&g[i].events;j?(h=g[c],h==null&&(h=g[f.camelCase(c)])):h=g;return h}},removeData:function(a,b,c){if(!!f.acceptData(a)){var d,e=f.expando,g=a.nodeType,h=g?f.cache:a,i=g?a[f.expando]:f.expando;if(!h[i])return;if(b){d=c?h[i][e]:h[i];if(d){d[b]||(b=f.camelCase(b)),delete d[b];if(!l(d))return}}if(c){delete h[i][e];if(!l(h[i]))return}var j=h[i][e];f.support.deleteExpando||!h.setInterval?delete h[i]:h[i]=null,j?(h[i]={},g||(h[i].toJSON=f.noop),h[i][e]=j):g&&(f.support.deleteExpando?delete a[f.expando]:a.removeAttribute?a.removeAttribute(f.expando):a[f.expando]=null)}},_data:function(a,b,c){return f.data(a,b,c,!0)},acceptData:function(a){if(a.nodeName){var b=f.noData[a.nodeName.toLowerCase()];if(b)return b!==!0&&a.getAttribute("classid")===b}return!0}}),f.fn.extend({data:function(a,c){var d=null;if(typeof a=="undefined"){if(this.length){d=f.data(this[0]);if(this[0].nodeType===1){var e=this[0].attributes,g;for(var h=0,i=e.length;h<i;h++)g=e[h].name,g.indexOf("data-")===0&&(g=f.camelCase(g.substring(5)),k(this[0],g,d[g]))}}return d}if(typeof a=="object")return this.each(function(){f.data(this,a)});var j=a.split(".");j[1]=j[1]?"."+j[1]:"";if(c===b){d=this.triggerHandler("getData"+j[1]+"!",[j[0]]),d===b&&this.length&&(d=f.data(this[0],a),d=k(this[0],a,d));return d===b&&j[1]?this.data(j[0]):d}return this.each(function(){var b=f(this),d=[j[0],c];b.triggerHandler("setData"+j[1]+"!",d),f.data(this,a,c),b.triggerHandler("changeData"+j[1]+"!",d)})},removeData:function(a){return this.each(function(){f.removeData(this,a)})}}),f.extend({_mark:function(a,c){a&&(c=(c||"fx")+"mark",f.data(a,c,(f.data(a,c,b,!0)||0)+1,!0))},_unmark:function(a,c,d){a!==!0&&(d=c,c=a,a=!1);if(c){d=d||"fx";var e=d+"mark",g=a?0:(f.data(c,e,b,!0)||1)-1;g?f.data(c,e,g,!0):(f.removeData(c,e,!0),m(c,d,"mark"))}},queue:function(a,c,d){if(a){c=(c||"fx")+"queue";var e=f.data(a,c,b,!0);d&&(!e||f.isArray(d)?e=f.data(a,c,f.makeArray(d),!0):e.push(d));return e||[]}},dequeue:function(a,b){b=b||"fx";var c=f.queue(a,b),d=c.shift(),e;d==="inprogress"&&(d=c.shift()),d&&(b==="fx"&&c.unshift("inprogress"),d.call(a,function(){f.dequeue(a,b)})),c.length||(f.removeData(a,b+"queue",!0),m(a,b,"queue"))}}),f.fn.extend({queue:function(a,c){typeof a!="string"&&(c=a,a="fx");if(c===b)return f.queue(this[0],a);return this.each(function(){var b=f.queue(this,a,c);a==="fx"&&b[0]!=="inprogress"&&f.dequeue(this,a)})},dequeue:function(a){return this.each(function(){f.dequeue(this,a)})},delay:function(a,b){a=f.fx?f.fx.speeds[a]||a:a,b=b||"fx";return this.queue(b,function(){var c=this;setTimeout(function(){f.dequeue(c,b)},a)})},clearQueue:function(a){return this.queue(a||"fx",[])},promise:function(a,c){function m(){--h||d.resolveWith(e,[e])}typeof a!="string"&&(c=a,a=b),a=a||"fx";var d=f.Deferred(),e=this,g=e.length,h=1,i=a+"defer",j=a+"queue",k=a+"mark",l;while(g--)if(l=f.data(e[g],i,b,!0)||(f.data(e[g],j,b,!0)||f.data(e[g],k,b,!0))&&f.data(e[g],i,f._Deferred(),!0))h++,l.done(m);m();return d.promise()}});var n=/[\n\t\r]/g,o=/\s+/,p=/\r/g,q=/^(?:button|input)$/i,r=/^(?:button|input|object|select|textarea)$/i,s=/^a(?:rea)?$/i,t=/^(?:autofocus|autoplay|async|checked|controls|defer|disabled|hidden|loop|multiple|open|readonly|required|scoped|selected)$/i,u,v;f.fn.extend({attr:function(a,b){return f.access(this,a,b,!0,f.attr)},removeAttr:function(a){return this.each(function(){f.removeAttr(this,a)})},prop:function(a,b){return f.access(this,a,b,!0,f.prop)},removeProp:function(a){a=f.propFix[a]||a;return this.each(function(){try{this[a]=b,delete this[a]}catch(c){}})},addClass:function(a){var b,c,d,e,g,h,i;if(f.isFunction(a))return this.each(function(b){f(this).addClass(a.call(this,b,this.className))});if(a&&typeof a=="string"){b=a.split(o);for(c=0,d=this.length;c<d;c++){e=this[c];if(e.nodeType===1)if(!e.className&&b.length===1)e.className=a;else{g=" "+e.className+" ";for(h=0,i=b.length;h<i;h++)~g.indexOf(" "+b[h]+" ")||(g+=b[h]+" ");e.className=f.trim(g)}}}return this},removeClass:function(a){var c,d,e,g,h,i,j;if(f.isFunction(a))return this.each(function(b){f(this).removeClass(a.call(this,b,this.className))});if(a&&typeof a=="string"||a===b){c=(a||"").split(o);for(d=0,e=this.length;d<e;d++){g=this[d];if(g.nodeType===1&&g.className)if(a){h=(" "+g.className+" ").replace(n," ");for(i=0,j=c.length;i<j;i++)h=h.replace(" "+c[i]+" "," ");g.className=f.trim(h)}else g.className=""}}return this},toggleClass:function(a,b){var c=typeof a,d=typeof b=="boolean";if(f.isFunction(a))return this.each(function(c){f(this).toggleClass(a.call(this,c,this.className,b),b)});return this.each(function(){if(c==="string"){var e,g=0,h=f(this),i=b,j=a.split(o);while(e=j[g++])i=d?i:!h.hasClass(e),h[i?"addClass":"removeClass"](e)}else if(c==="undefined"||c==="boolean")this.className&&f._data(this,"__className__",this.className),this.className=this.className||a===!1?"":f._data(this,"__className__")||""})},hasClass:function(a){var b=" "+a+" ";for(var c=0,d=this.length;c<d;c++)if(this[c].nodeType===1&&(" "+this[c].className+" ").replace(n," ").indexOf(b)>-1)return!0;return!1},val:function(a){var c,d,e=this[0];if(!arguments.length){if(e){c=f.valHooks[e.nodeName.toLowerCase()]||f.valHooks[e.type];if(c&&"get"in c&&(d=c.get(e,"value"))!==b)return d;d=e.value;return typeof d=="string"?d.replace(p,""):d==null?"":d}return b}var g=f.isFunction(a);return this.each(function(d){var e=f(this),h;if(this.nodeType===1){g?h=a.call(this,d,e.val()):h=a,h==null?h="":typeof h=="number"?h+="":f.isArray(h)&&(h=f.map(h,function(a){return a==null?"":a+""})),c=f.valHooks[this.nodeName.toLowerCase()]||f.valHooks[this.type];if(!c||!("set"in c)||c.set(this,h,"value")===b)this.value=h}})}}),f.extend({valHooks:{option:{get:function(a){var b=a.attributes.value;return!b||b.specified?a.value:a.text}},select:{get:function(a){var b,c=a.selectedIndex,d=[],e=a.options,g=a.type==="select-one";if(c<0)return null;for(var h=g?c:0,i=g?c+1:e.length;h<i;h++){var j=e[h];if(j.selected&&(f.support.optDisabled?!j.disabled:j.getAttribute("disabled")===null)&&(!j.parentNode.disabled||!f.nodeName(j.parentNode,"optgroup"))){b=f(j).val();if(g)return b;d.push(b)}}if(g&&!d.length&&e.length)return f(e[c]).val();return d},set:function(a,b){var c=f.makeArray(b);f(a).find("option").each(function(){this.selected=f.inArray(f(this).val(),c)>=0}),c.length||(a.selectedIndex=-1);return c}}},attrFn:{val:!0,css:!0,html:!0,text:!0,data:!0,width:!0,height:!0,offset:!0},attrFix:{tabindex:"tabIndex"},attr:function(a,c,d,e){var g=a.nodeType;if(!a||g===3||g===8||g===2)return b;if(e&&c in f.attrFn)return f(a)[c](d);if(!("getAttribute"in a))return f.prop(a,c,d);var h,i,j=g!==1||!f.isXMLDoc(a);j&&(c=f.attrFix[c]||c,i=f.attrHooks[c],i||(t.test(c)?i=v:u&&(i=u)));if(d!==b){if(d===null){f.removeAttr(a,c);return b}if(i&&"set"in i&&j&&(h=i.set(a,d,c))!==b)return h;a.setAttribute(c,""+d);return d}if(i&&"get"in i&&j&&(h=i.get(a,c))!==null)return h;h=a.getAttribute(c);return h===null?b:h},removeAttr:function(a,b){var c;a.nodeType===1&&(b=f.attrFix[b]||b,f.attr(a,b,""),a.removeAttribute(b),t.test(b)&&(c=f.propFix[b]||b)in a&&(a[c]=!1))},attrHooks:{type:{set:function(a,b){if(q.test(a.nodeName)&&a.parentNode)f.error("type property can't be changed");else if(!f.support.radioValue&&b==="radio"&&f.nodeName(a,"input")){var c=a.value;a.setAttribute("type",b),c&&(a.value=c);return b}}},value:{get:function(a,b){if(u&&f.nodeName(a,"button"))return u.get(a,b);return b in a?a.value:null},set:function(a,b,c){if(u&&f.nodeName(a,"button"))return u.set(a,b,c);a.value=b}}},propFix:{tabindex:"tabIndex",readonly:"readOnly","for":"htmlFor","class":"className",maxlength:"maxLength",cellspacing:"cellSpacing",cellpadding:"cellPadding",rowspan:"rowSpan",colspan:"colSpan",usemap:"useMap",frameborder:"frameBorder",contenteditable:"contentEditable"},prop:function(a,c,d){var e=a.nodeType;if(!a||e===3||e===8||e===2)return b;var g,h,i=e!==1||!f.isXMLDoc(a);i&&(c=f.propFix[c]||c,h=f.propHooks[c]);return d!==b?h&&"set"in h&&(g=h.set(a,d,c))!==b?g:a[c]=d:h&&"get"in h&&(g=h.get(a,c))!==null?g:a[c]},propHooks:{tabIndex:{get:function(a){var c=a.getAttributeNode("tabindex");return c&&c.specified?parseInt(c.value,10):r.test(a.nodeName)||s.test(a.nodeName)&&a.href?0:b}}}}),f.attrHooks.tabIndex=f.propHooks.tabIndex,v={get:function(a,c){var d;return f.prop(a,c)===!0||(d=a.getAttributeNode(c))&&d.nodeValue!==!1?c.toLowerCase():b},set:function(a,b,c){var d;b===!1?f.removeAttr(a,c):(d=f.propFix[c]||c,d in a&&(a[d]=!0),a.setAttribute(c,c.toLowerCase()));return c}},f.support.getSetAttribute||(u=f.valHooks.button={get:function(a,c){var d;d=a.getAttributeNode(c);return d&&d.nodeValue!==""?d.nodeValue:b},set:function(a,b,d){var e=a.getAttributeNode(d);e||(e=c.createAttribute(d),a.setAttributeNode(e));return e.nodeValue=b+""}},f.each(["width","height"],function(a,b){f.attrHooks[b]=f.extend(f.attrHooks[b],{set:function(a,c){if(c===""){a.setAttribute(b,"auto");return c}}})})),f.support.hrefNormalized||f.each(["href","src","width","height"],function(a,c){f.attrHooks[c]=f.extend(f.attrHooks[c],{get:function(a){var d=a.getAttribute(c,2);return d===null?b:d}})}),f.support.style||(f.attrHooks.style={get:function(a){return a.style.cssText.toLowerCase()||b},set:function(a,b){return a.style.cssText=""+b}}),f.support.optSelected||(f.propHooks.selected=f.extend(f.propHooks.selected,{get:function(a){var b=a.parentNode;b&&(b.selectedIndex,b.parentNode&&b.parentNode.selectedIndex);return null}})),f.support.checkOn||f.each(["radio","checkbox"],function(){f.valHooks[this]={get:function(a){return a.getAttribute("value")===null?"on":a.value}}}),f.each(["radio","checkbox"],function(){f.valHooks[this]=f.extend(f.valHooks[this],{set:function(a,b){if(f.isArray(b))return a.checked=f.inArray(f(a).val(),b)>=0}})});var w=/\.(.*)$/,x=/^(?:textarea|input|select)$/i,y=/\./g,z=/ /g,A=/[^\w\s.|`]/g,B=function(a){return a.replace(A,"\\$&")};f.event={add:function(a,c,d,e){if(a.nodeType!==3&&a.nodeType!==8){if(d===!1)d=C;else if(!d)return;var g,h;d.handler&&(g=d,d=g.handler),d.guid||(d.guid=f.guid++);var i=f._data(a);if(!i)return;var j=i.events,k=i.handle;j||(i.events=j={}),k||(i.handle=k=function(a){return typeof f!="undefined"&&(!a||f.event.triggered!==a.type)?f.event.handle.apply(k.elem,arguments):b}),k.elem=a,c=c.split(" ");var l,m=0,n;while(l=c[m++]){h=g?f.extend({},g):{handler:d,data:e},l.indexOf(".")>-1?(n=l.split("."),l=n.shift(),h.namespace=n.slice(0).sort().join(".")):(n=[],h.namespace=""),h.type=l,h.guid||(h.guid=d.guid);var o=j[l],p=f.event.special[l]||{};if(!o){o=j[l]=[];if(!p.setup||p.setup.call(a,e,n,k)===!1)a.addEventListener?a.addEventListener(l,k,!1):a.attachEvent&&a.attachEvent("on"+l,k)}p.add&&(p.add.call(a,h),h.handler.guid||(h.handler.guid=d.guid)),o.push(h),f.event.global[l]=!0}a=null}},global:{},remove:function(a,c,d,e){if(a.nodeType!==3&&a.nodeType!==8){d===!1&&(d=C);var g,h,i,j,k=0,l,m,n,o,p,q,r,s=f.hasData(a)&&f._data(a),t=s&&s.events;if(!s||!t)return;c&&c.type&&(d=c.handler,c=c.type);if(!c||typeof c=="string"&&c.charAt(0)==="."){c=c||"";for(h in t)f.event.remove(a,h+c);return}c=c.split(" ");while(h=c[k++]){r=h,q=null,l=h.indexOf(".")<0,m=[],l||(m=h.split("."),h=m.shift(),n=new RegExp("(^|\\.)"+f.map(m.slice(0).sort(),B).join("\\.(?:.*\\.)?")+"(\\.|$)")),p=t[h];if(!p)continue;if(!d){for(j=0;j<p.length;j++){q=p[j];if(l||n.test(q.namespace))f.event.remove(a,r,q.handler,j),p.splice(j--,1)}continue}o=f.event.special[h]||{};for(j=e||0;j<p.length;j++){q=p[j];if(d.guid===q.guid){if(l||n.test(q.namespace))e==null&&p.splice(j--,1),o.remove&&o.remove.call(a,q);if(e!=null)break}}if(p.length===0||e!=null&&p.length===1)(!o.teardown||o.teardown.call(a,m)===!1)&&f.removeEvent(a,h,s.handle),g=null,delete 
@@ -605,6 +1250,13 @@ t[h]}if(f.isEmptyObject(t)){var u=s.handle;u&&(u.elem=null),delete s.events,dele
 }
 var q = window.jQuery;
 js.JQuery = q;
+q.fn.iterator = function() {
+	return { pos : 0, j : this, hasNext : function() {
+		return this.pos < this.j.length;
+	}, next : function() {
+		return $(this.j[this.pos++]);
+	}};
+};
 if(typeof document != "undefined") js.Lib.document = document;
 if(typeof window != "undefined") {
 	js.Lib.window = window;
@@ -614,16 +1266,18 @@ if(typeof window != "undefined") {
 		return f(msg,[url + ":" + line]);
 	};
 }
+sea.Vector2Utils.dirVectors = [new sea.Vector2(1,0),new sea.Vector2(0,1),new sea.Vector2(-1,0),new sea.Vector2(0,-1)];
 sea.Seabattle.ships = new Array();
 sea.Seabattle.scale = 64;
-sea.Seabattle.offset = { x : 1, y : 1};
+sea.Seabattle.offset = new sea.Vector2(1,1);
 sea.Seabattle.selectedShip = 0;
 sea.Seabattle.targetTime = 0;
 sea.Seabattle.time = 0;
+sea.Seabattle.server = new sea.backend.Server(30,15);
 sea.Seabattle.prevTime = 0;
 sea.Seabattle.deltaTime = 1 / 60.0;
 sea.Seabattle.playerTurn = true;
+sea.Seabattle.PIXEL_DENSITY = 64;
 sea.Seabattle.timeScale = 1000;
-sea.Ship.dirVectors = [{ x : 1, y : 0},{ x : 0, y : 1},{ x : -1, y : 0},{ x : 0, y : -1}];
 sea.Seabattle.main();
 })();
