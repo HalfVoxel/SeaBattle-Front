@@ -14,7 +14,7 @@ class Move {
         this.dir = dir;
     }
 
-    public function placeMarkers (source : Ship, timestep : Int) : Ship {
+    /*public function placeMarkers (source : Ship, timestep : Int) : Ship {
         var server = source.server;
         if (timestep < 0 || timestep >= collision.length) throw "Out Of Time Bounds Exception";
 
@@ -24,7 +24,7 @@ class Move {
             if (v != null) return v;
         }
         return null;
-    }
+    }*/
 
     public function execute (ship : Ship) {
         ship.position = ship.position.add(relEnd);

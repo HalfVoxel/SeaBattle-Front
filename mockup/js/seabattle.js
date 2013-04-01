@@ -628,27 +628,6 @@ sea.backend.Server.prototype = {
 		var res = { ships : filtered};
 		return res;
 	}
-	,clearCollisionMarkers: function() {
-		var _g = 0, _g1 = this.collisionTiles;
-		while(_g < _g1.length) {
-			var tilearr = _g1[_g];
-			++_g;
-			var _g2 = 0;
-			while(_g2 < tilearr.length) {
-				var tile = tilearr[_g2];
-				++_g2;
-				tile.collisionMarker = null;
-			}
-		}
-	}
-	,tryPlaceCollisionMarker: function(p,ref) {
-		var x = p.x | 0;
-		var y = p.y | 0;
-		console.log("Placing Marker at " + x + "," + y);
-		if(this.collisionTiles[y][x].collisionMarker != null) return this.collisionTiles[y][x].collisionMarker;
-		this.collisionTiles[y][x].collisionMarker = ref;
-		return null;
-	}
 	,processAllMoves: function() {
 		var maxTime = 0;
 		var _g = 0, _g1 = this.ships;
@@ -666,17 +645,31 @@ sea.backend.Server.prototype = {
 		var _g = 0;
 		while(_g < maxTime) {
 			var i = _g++;
+			var _g1 = 0, _g2 = this.ships;
+			while(_g1 < _g2.length) {
+				var ship = _g2[_g1];
+				++_g1;
+				ship.beginOrder(i);
+			}
 			var _g1 = 0;
 			while(_g1 < 3) {
 				var timestep = _g1++;
 				console.log("--- TIMESTEP ---");
-				this.clearCollisionMarkers();
 				var _g2 = 0, _g3 = this.ships;
 				while(_g2 < _g3.length) {
 					var ship = _g3[_g2];
 					++_g2;
 					var v = i >= ship.orders.length?{ type : sea.OrderType.Idle}:ship.orders[i];
-					ship.checkCollision(v,timestep);
+					ship.simulateTime(i,timestep / 2);
+				}
+				var _g3 = 0, _g2 = this.ships.length;
+				while(_g3 < _g2) {
+					var a = _g3++;
+					var _g5 = a + 1, _g4 = this.ships.length;
+					while(_g5 < _g4) {
+						var b = _g5++;
+						this.ships[a].testCollision(this.ships[b],i,timestep / 2);
+					}
 				}
 			}
 			var _g1 = 0, _g2 = this.ships;
@@ -684,7 +677,7 @@ sea.backend.Server.prototype = {
 				var ship = _g2[_g1];
 				++_g1;
 				var v = i >= ship.orders.length?{ type : sea.OrderType.Idle}:ship.orders[i];
-				ship.executeOrder(v);
+				ship.executeOrder(i);
 			}
 		}
 		var _g = 0, _g1 = this.ships;
@@ -733,19 +726,6 @@ sea.backend.Move.prototype = {
 	execute: function(ship) {
 		ship.position = ship.position.add(this.relEnd);
 		ship.dir = (ship.dir + this.dir + 4) % 4;
-	}
-	,placeMarkers: function(source,timestep) {
-		var server = source.server;
-		if(timestep < 0 || timestep >= this.collision.length) throw "Out Of Time Bounds Exception";
-		var arr = this.collision[timestep];
-		var _g = 0;
-		while(_g < arr.length) {
-			var p = arr[_g];
-			++_g;
-			var v = server.tryPlaceCollisionMarker(source.position.mult(2).add(p),source);
-			if(v != null) return v;
-		}
-		return null;
 	}
 	,__class__: sea.backend.Move
 }
@@ -1026,20 +1006,26 @@ sea.Ship.prototype = {
 		return dir * 90;
 	}
 	,progressTime: function(time) {
-		this.simulateTime(time);
 		var orderBase = Math.floor(time);
 		orderBase = orderBase > this.orders.length - 1?this.orders.length - 1:orderBase;
 		orderBase = orderBase < 0?0:orderBase;
 		if(this.orders.length > 0) {
 			var order = this.orders[orderBase];
 			if(!order.executed) {
-				order.executed = true;
 				if(order.type == sea.OrderType.Fire) {
+					order.executed = true;
 					console.log("Executing Order " + Std.string(order.type) + " " + orderBase);
 					new sea.Projectile(this,sea.Vector2Utils.dirToVector((order.dir + this.dir + 4) % 4));
 				}
+				if(order.type == sea.OrderType.Collide && time - orderBase >= order.time) {
+					order.executed = true;
+					new sea.Island(this.position.copy());
+				}
+			}
+			if(order.type == sea.OrderType.Collide) {
 			}
 		}
+		this.simulateTime(time);
 	}
 	,simulateTime: function(t) {
 		t = t < 0?0:t;
@@ -1057,6 +1043,7 @@ sea.Ship.prototype = {
 		while(_g < orderBase) {
 			var i = _g++;
 			var order = this.orders[i];
+			while(order.chained != null) order = order.chained;
 			if(order.type == sea.OrderType.Move) {
 				if(order.dir != 0) this.position = this.position.add(sea.Vector2Utils.dirToVector(this.dir));
 				this.dir = (this.dir + order.dir + 4) % 4;
@@ -1068,6 +1055,10 @@ sea.Ship.prototype = {
 		if(t > 0.001) {
 			var newPos = this.position.copy();
 			var order = this.orders[orderBase];
+			while(order.chained != null) {
+				console.log("Running chained order ");
+				order = order.chained;
+			}
 			var newDir = this.dir;
 			if(order.type == sea.OrderType.Move) {
 				if(order.dir != 0) newPos = newPos.add(sea.Vector2Utils.dirToVector(newDir));
@@ -1109,6 +1100,7 @@ sea.Ship.prototype = {
 			this.simulateTime(i);
 			var p = this.position;
 			var order = this.orders[i - 1];
+			while(order.chained != null) order = order.chained;
 			if(order.type == sea.OrderType.Move && order.dir != 2) {
 				if(order.dir == 0) g.lineTo(p.x,p.y); else {
 					var rotp = this.position.sub(sea.Vector2Utils.dirToVector(this.dir));
@@ -1137,12 +1129,64 @@ sea.Ship.prototype = {
 		this.bmpAnimation.rotation = this.angle + 90;
 	}
 	,endSimulation: function() {
-		this.simulateTime(this.orders.length);
+		this.progressTime(this.orders.length);
 		this.orders.length = 0;
 		this.realPosition = this.position.copy();
 		this.realDir = this.dir;
 	}
 	,__class__: sea.Ship
+}
+sea.backend.Polygon = function(verts) {
+	this.rotation = 0.0;
+	this.vertices = verts;
+	this.center = new sea.Vector2(0,0);
+};
+sea.backend.Polygon.__name__ = true;
+sea.backend.Polygon.intersects = function(a,b) {
+	if(a.contains(b.worldVertex(0)) || b.contains(a.worldVertex(0))) return true;
+	var _g1 = 0, _g = a.vertices.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		var _g3 = 0, _g2 = b.vertices.length;
+		while(_g3 < _g2) {
+			var j = _g3++;
+			if(sea.backend.Polygon.segmentsIntersect(a.worldVertex(i),a.worldVertex((i + 1) % a.vertices.length),b.worldVertex(j),b.worldVertex((j + 1) % b.vertices.length))) return true;
+		}
+	}
+	return false;
+}
+sea.backend.Polygon.segmentsIntersect = function(start1,end1,start2,end2) {
+	var dir1 = end1.sub(start1);
+	var dir2 = end2.sub(start2);
+	var den = dir2.y * dir1.x - dir2.x * dir1.y;
+	if(den == 0.0) return false;
+	var nom = dir2.x * (start1.y - start2.y) - dir2.y * (start1.x - start2.x);
+	var nom2 = dir1.x * (start1.y - start2.y) - dir1.y * (start1.x - start2.x);
+	var u = nom / den;
+	var u2 = nom2 / den;
+	if(u < 0.0 || u > 1.0 || u2 < 0.0 || u2 > 1.0) return false;
+	return true;
+}
+sea.backend.Polygon.prototype = {
+	contains: function(p) {
+		var j = this.vertices.length - 1;
+		var inside = false;
+		var _g1 = 0, _g = this.vertices.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			if((this.worldVertex(i).y <= p.y && p.y < this.worldVertex(j).y || this.worldVertex(j).y <= p.y && p.y < this.worldVertex(i).y) && p.x < (this.worldVertex(j).x - this.worldVertex(i).x) * (p.y - this.worldVertex(i).y) / (this.worldVertex(j).y - this.worldVertex(i).y) + this.worldVertex(i).x) {
+				inside = !inside;
+				j = i;
+			}
+		}
+		return inside;
+	}
+	,worldVertex: function(index) {
+		var forward = new sea.Vector2(Math.cos(this.rotation * (Math.PI * 2 / 360)),Math.sin(this.rotation * (Math.PI * 2 / 360)));
+		var right = new sea.Vector2(forward.y,-forward.x);
+		return forward.mult(this.vertices[index].y).add(right.mult(this.vertices[index].x)).add(this.center);
+	}
+	,__class__: sea.backend.Polygon
 }
 sea.backend.PlayerTurn = function() {
 };
@@ -1173,32 +1217,94 @@ sea.backend.Ship = function(server,playerIndex,entityIndex,initPos) {
 	this.position = initPos == null?new sea.Vector2(0,0):initPos;
 	this.dir = 0;
 	this.orders = new Array();
+	var verts = new Array();
+	verts.push(new sea.Vector2(-0.3,-0.4));
+	verts.push(new sea.Vector2(0.3,-0.4));
+	verts.push(new sea.Vector2(0.3,0.4));
+	verts.push(new sea.Vector2(-0.3,0.4));
+	this.shape = new sea.backend.Polygon(verts);
 };
 sea.backend.Ship.__name__ = true;
+sea.backend.Ship.dirToAngle = function(dir) {
+	return dir * 90;
+}
 sea.backend.Ship.prototype = {
-	onCollision: function(other,timestep) {
-		console.log("Ship " + this.entityIndex + " collided with " + other.entityIndex);
-		this.orderResult.push({ type : sea.OrderType.Collide, time : timestep / 2.0});
+	onCollision: function(other,orderIndex,time) {
+		console.log("Ship " + this.entityIndex + " collided with " + other.entityIndex + " at " + time);
+		var od = { type : sea.OrderType.Collide, time : time};
+		if(orderIndex < this.orders.length) {
+			od.chained = this.orders[orderIndex];
+			console.log(this.orders[orderIndex]);
+		}
+		this.orderResult.push(od);
 		this.destroyed++;
 	}
-	,executeOrder: function(order) {
-		if(this.destroyed <= 1) {
-			this.server.getMove(this,order).execute(this);
-			this.orderResult.push(order);
+	,executeOrder: function(orderIndex) {
+		if(this.destroyed < 1) {
+			if(orderIndex < this.orders.length) {
+				this.simulateTime(orderIndex,1);
+				this.position = this.simPosition.copy();
+				this.dir = this.simDir;
+				this.orderResult.push(this.orders[orderIndex]);
+			} else {
+				var v = { type : sea.OrderType.Idle};
+				this.orderResult.push(v);
+			}
 		}
 		if(this.destroyed != 0) this.destroyed++;
 	}
-	,checkCollision: function(order,timestep) {
-		if(this.destroyed != 0) return;
-		var move = this.server.getMove(this,order);
-		console.log(move);
-		console.log(order.type);
-		var colliding = move.placeMarkers(this,timestep);
-		if(colliding != null) {
-			this.onCollision(colliding,timestep);
-			colliding.onCollision(this,timestep);
-		} else {
+	,simulateTime: function(orderIndex,t) {
+		t = t < 0?0:t;
+		t = t > 1?1:t;
+		this.simPosition = this.position.copy();
+		this.simAngle = sea.backend.Ship.dirToAngle(this.dir);
+		this.simDir = this.dir;
+		this.shape.center = this.simPosition.copy();
+		this.shape.rotation = this.simAngle;
+		if(orderIndex >= this.orders.length) return;
+		if(t > 0.001) {
+			var newPos = this.position.copy();
+			var order = this.orders[orderIndex];
+			var newDir = this.dir;
+			if(order.type == sea.OrderType.Move) {
+				if(order.dir != 0) newPos = newPos.add(sea.Vector2Utils.dirToVector(newDir));
+				newDir = (newDir + order.dir + 4) % 4;
+				newPos = newPos.add(sea.Vector2Utils.dirToVector(this.dir));
+				if(order.dir == 0) this.simPosition = sea.Vector2Utils.lerp(this.position,newPos,t); else {
+					var rotPos = this.position.add(sea.Vector2Utils.dirToVector(newDir));
+					var a = sea.backend.Ship.dirToAngle((newDir + 2) % 4);
+					var b = sea.backend.Ship.dirToAngle(this.dir);
+					var aa = sea.backend.Ship.dirToAngle(this.dir);
+					var ab = sea.backend.Ship.dirToAngle(newDir);
+					if(order.dir == 1) {
+						if(b < a) b += 360;
+						if(ab < aa) ab += 360;
+						var ra = (a + (b - a) * t) % 360;
+						this.simPosition = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
+						this.simAngle = (aa + (ab - aa) * t) % 360;
+					} else {
+						if(b > a) a += 360;
+						if(ab > aa) aa += 360;
+						var ra = (a + (b - a) * t) % 360;
+						this.simPosition = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
+						this.simAngle = (aa + (ab - aa) * t) % 360;
+					}
+				}
+			}
+			this.simDir = newDir;
 		}
+		this.shape.center = this.simPosition.copy();
+		this.shape.rotation = this.simAngle;
+		console.log(Std.string(this.shape.center) + " " + this.shape.rotation);
+	}
+	,testCollision: function(other,orderIndex,time) {
+		if(this.destroyed != 0) return;
+		if(sea.backend.Polygon.intersects(this.shape,other.shape)) {
+			this.onCollision(other,orderIndex,time);
+			other.onCollision(this,orderIndex,time);
+		}
+	}
+	,beginOrder: function(orderIndex) {
 	}
 	,finalizeTurn: function() {
 		this.orders = this.orderResult;
@@ -1266,6 +1372,7 @@ if(typeof window != "undefined") {
 		return f(msg,[url + ":" + line]);
 	};
 }
+sea.backend.Server.TIMESTEPS = 3;
 sea.Vector2Utils.dirVectors = [new sea.Vector2(1,0),new sea.Vector2(0,1),new sea.Vector2(-1,0),new sea.Vector2(0,-1)];
 sea.Seabattle.ships = new Array();
 sea.Seabattle.scale = 64;
@@ -1279,5 +1386,6 @@ sea.Seabattle.deltaTime = 1 / 60.0;
 sea.Seabattle.playerTurn = true;
 sea.Seabattle.PIXEL_DENSITY = 64;
 sea.Seabattle.timeScale = 1000;
+sea.backend.Polygon.DEG2RAD = Math.PI * 2 / 360;
 sea.Seabattle.main();
 })();

@@ -83,10 +83,11 @@ class Ship implements HasPosition {
     }
 
     public function endSimulation () {
-        simulateTime(orders.length);
+        progressTime(orders.length);
         untyped orders.length = 0;
         realPosition = position.copy();
         realDir = dir;
+
     }
 
     public function update () {
@@ -133,6 +134,8 @@ class Ship implements HasPosition {
             simulateTime(i);
             var p = position;
             var order = orders[i-1];
+            while (order.chained != null) order = order.chained;
+
             if (order.type == OrderType.Move && order.dir != 2) {
                 if (order.dir == 0) {
                     g.lineTo (p.x,p.y);
@@ -168,6 +171,7 @@ class Ship implements HasPosition {
 
         for (i in 0...orderBase) {
             var order = orders[i];
+            while (order.chained != null) order = order.chained;
             if (order.type == OrderType.Move) {
                 if (order.dir != 0) {
                     position = position.add (Vector2Utils.dirToVector(dir));
@@ -183,6 +187,11 @@ class Ship implements HasPosition {
         if (t > 0.001) {
             var newPos = position.copy();
             var order = orders[orderBase];
+            while (order.chained != null) {
+                trace ("Running chained order ");
+                order = order.chained;
+            }
+
             var newDir = dir;
             if (order.type == OrderType.Move) {
                 if (order.dir != 0) {
@@ -224,23 +233,38 @@ class Ship implements HasPosition {
         }
     }
 
+    /** NOTE, might fail on low FPS */
     public function progressTime (time : Float) {
-        simulateTime(time);
+
         var orderBase = Math.floor (time);
+
         orderBase = orderBase > orders.length-1 ? orders.length-1 : orderBase;
         orderBase = orderBase < 0 ? 0 : orderBase;
 
         if (orders.length > 0) {
+
             var order = orders[orderBase];
             if (!order.executed) {
-                order.executed = true;
-                
                 if (order.type == OrderType.Fire) {
+                    order.executed = true;
                     trace ("Executing Order " + order.type + " " + orderBase);
                     new Projectile (this, Vector2Utils.dirToVector((order.dir+dir+4) % 4));
                 }
+
+                if (order.type == OrderType.Collide && (time - orderBase) >= order.time) {
+                    order.executed = true;
+                    new sea.Island (position.copy());
+                }
+            }
+
+            if (order.type == OrderType.Collide) {
+
+                //Skip this order
+                //time = time + 1;
             }
         }
+
+        simulateTime(time);
     }
 
     function dirToAngle (dir : Float) {

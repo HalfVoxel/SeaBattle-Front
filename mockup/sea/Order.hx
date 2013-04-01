@@ -12,5 +12,6 @@ typedef Order = {
     type : OrderType,
     ?dir : Int,
     ?executed : Bool,
-    ?time : Float
+    ?time : Float,
+    ?chained : Order
 }

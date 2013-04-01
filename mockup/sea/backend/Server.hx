@@ -198,6 +198,8 @@ class Server {
         }
     }
 
+    static public inline var TIMESTEPS = 3;
+
     private function processAllMoves () {
         var maxTime = 0;
         for (ship in ships) {
@@ -208,21 +210,34 @@ class Server {
             ship.initTurn();
         }
 
+
         for (i in 0...maxTime) {
 
-            for (timestep in 0...3) {
+            for (ship in ships) {
+                ship.beginOrder (i);
+            }
+
+            for (timestep in 0...TIMESTEPS) {
                 trace ("--- TIMESTEP ---");
-                clearCollisionMarkers();
+                //clearCollisionMarkers();
 
                 for (ship in ships) {
                     var v = i >= ship.orders.length ? {type:OrderType.Idle} : ship.orders[i];
-                    ship.checkCollision (v, timestep);
+                    ship.simulateTime (i,timestep/(TIMESTEPS-1));
+                    
+                    //ship.checkCollision (v, timestep);
+                }
+
+                for (a in 0...ships.length) {
+                    for (b in (a+1)...ships.length) {
+                        ships[a].testCollision(ships[b], i, timestep/(TIMESTEPS-1));
+                    }
                 }
             }
 
             for (ship in ships) {
                 var v = i >= ship.orders.length ? {type:OrderType.Idle} : ship.orders[i];
-                ship.executeOrder (v);
+                ship.executeOrder (i);
             }
         }
 
@@ -231,7 +246,7 @@ class Server {
         }
     }
 
-    public function tryPlaceCollisionMarker (p : Vector2, ref : Ship) : Ship {
+    /*public function tryPlaceCollisionMarker (p : Vector2, ref : Ship) : Ship {
         var x = Std.int(p.x);
         var y = Std.int(p.y);
         trace ("Placing Marker at " + x+','+y);
@@ -246,7 +261,7 @@ class Server {
                 tile.collisionMarker = null;
             }
         }
-    }
+    }*/
 
     public function getResult (playerIndex : Int) : ResultData {
         var filtered = new Array<Ship>();
