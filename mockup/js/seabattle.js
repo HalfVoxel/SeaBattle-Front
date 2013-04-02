@@ -895,6 +895,12 @@ sea.Seabattle.keyPress = function(event) {
 }
 sea.Seabattle.turnOver = function() {
 	sea.Seabattle.playerTurn = false;
+	var _g = 0, _g1 = sea.Seabattle.ships;
+	while(_g < _g1.length) {
+		var ship = _g1[_g];
+		++_g;
+		ship.moveToSimulatedTime(sea.Seabattle.time);
+	}
 	var turn = new sea.backend.PlayerTurn();
 	turn.playerIndex = 0;
 	turn.ships = sea.Seabattle.ships;
@@ -939,11 +945,13 @@ sea.Seabattle.tick = function() {
 	var t = new Date().getTime();
 	sea.Seabattle.deltaTime = (t - sea.Seabattle.prevTime) * 0.001;
 	sea.Seabattle.prevTime = t;
-	var _g = 0, _g1 = sea.Seabattle.ships;
-	while(_g < _g1.length) {
-		var ship = _g1[_g];
-		++_g;
-		ship.simulateTime(sea.Seabattle.time);
+	if(sea.Seabattle.playerTurn) {
+		var _g = 0, _g1 = sea.Seabattle.ships;
+		while(_g < _g1.length) {
+			var ship = _g1[_g];
+			++_g;
+			ship.moveToSimulatedTime(sea.Seabattle.time);
+		}
 	}
 	sea.Seabattle.stage.scaleX = sea.Seabattle.scale;
 	sea.Seabattle.stage.scaleY = sea.Seabattle.scale;
@@ -1005,60 +1013,14 @@ sea.Ship.prototype = {
 	dirToAngle: function(dir) {
 		return dir * 90;
 	}
-	,progressTime: function(time) {
-		var orderBase = Math.floor(time);
-		orderBase = orderBase > this.orders.length - 1?this.orders.length - 1:orderBase;
-		orderBase = orderBase < 0?0:orderBase;
-		if(this.orders.length > 0) {
-			var order = this.orders[orderBase];
-			if(!order.executed) {
-				if(order.type == sea.OrderType.Fire) {
-					order.executed = true;
-					console.log("Executing Order " + Std.string(order.type) + " " + orderBase);
-					new sea.Projectile(this,sea.Vector2Utils.dirToVector((order.dir + this.dir + 4) % 4));
-				}
-				if(order.type == sea.OrderType.Collide && time - orderBase >= order.time) {
-					order.executed = true;
-					new sea.Island(this.position.copy());
-				}
-			}
-			if(order.type == sea.OrderType.Collide) {
-			}
-		}
-		this.simulateTime(time);
-	}
-	,simulateTime: function(t) {
-		t = t < 0?0:t;
-		t = t > this.orders.length?this.orders.length:t;
-		if(t == 0) {
+	,simulateEvent: function(event,t) {
+		switch( (event.type)[1] ) {
+		case 0:
 			this.position = this.realPosition.copy();
 			this.dir = this.realDir;
 			this.angle = this.dirToAngle(this.dir);
-			return;
-		}
-		var orderBase = Math.floor(t);
-		this.position = this.realPosition.copy();
-		this.dir = this.realDir;
-		var _g = 0;
-		while(_g < orderBase) {
-			var i = _g++;
-			var order = this.orders[i];
-			while(order.chained != null) order = order.chained;
-			if(order.type == sea.OrderType.Move) {
-				if(order.dir != 0) this.position = this.position.add(sea.Vector2Utils.dirToVector(this.dir));
-				this.dir = (this.dir + order.dir + 4) % 4;
-				this.position = this.position.add(sea.Vector2Utils.dirToVector(this.dir));
-			}
-		}
-		this.angle = this.dirToAngle(this.dir);
-		t -= orderBase;
-		if(t > 0.001) {
 			var newPos = this.position.copy();
-			var order = this.orders[orderBase];
-			while(order.chained != null) {
-				console.log("Running chained order ");
-				order = order.chained;
-			}
+			var order = event;
 			var newDir = this.dir;
 			if(order.type == sea.OrderType.Move) {
 				if(order.dir != 0) newPos = newPos.add(sea.Vector2Utils.dirToVector(newDir));
@@ -1085,25 +1047,121 @@ sea.Ship.prototype = {
 					}
 				}
 			}
+			break;
+		default:
 		}
+	}
+	,completeEvent: function(event) {
+		if(event.completed) return;
+		event.completed = true;
+		console.log("Completed " + Std.string(event.type));
+		switch( (event.type)[1] ) {
+		case 0:
+			this.simulateEvent(event,1);
+			this.realPosition = this.position.copy();
+			this.dir = (this.dir + event.dir + 4) % 4;
+			this.realDir = this.dir;
+			break;
+		default:
+		}
+	}
+	,beginEvent: function(event) {
+		if(event.executed) return;
+		event.executed = true;
+		console.log("Begun " + Std.string(event.type));
+	}
+	,progressTime: function(time) {
+		var accTime = 0.0;
+		var _g1 = 0, _g = this.orders.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			var t = this.orders[i].time != null?this.orders[i].time:1;
+			if(!this.orders[i].executed) this.beginEvent(this.orders[i]);
+			if(accTime + t > time) {
+				this.simulateEvent(this.orders[i],time - accTime);
+				break;
+			} else if(!this.orders[i].completed) this.completeEvent(this.orders[i]);
+			accTime += t;
+		}
+	}
+	,simulateTime: function(t) {
+		var cpos = this.realPosition.copy();
+		var cangle = this.dirToAngle(this.realDir);
+		var cdir = this.realDir;
+		var accTime = 0.0;
+		var _g1 = 0, _g = this.orders.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			var order = this.orders[i];
+			var eventTime = order.time != null?order.time:1;
+			var elapsedTime = t - accTime;
+			elapsedTime = elapsedTime > eventTime?eventTime:elapsedTime;
+			if(accTime < t) {
+				if(order.type == sea.OrderType.Move) {
+					var order1 = this.orders[i];
+					while(order1.chained != null) {
+						console.log("Running chained order ");
+						order1 = order1.chained;
+					}
+					var newDir = cdir;
+					var newPos = cpos.copy();
+					if(order1.type == sea.OrderType.Move) {
+						if(order1.dir != 0) newPos = newPos.add(sea.Vector2Utils.dirToVector(newDir));
+						newDir = (newDir + order1.dir + 4) % 4;
+						newPos = newPos.add(sea.Vector2Utils.dirToVector(cdir));
+						if(order1.dir == 0) cpos = sea.Vector2Utils.lerp(cpos,newPos,elapsedTime); else {
+							var rotPos = cpos.add(sea.Vector2Utils.dirToVector(newDir));
+							var a = this.dirToAngle((newDir + 2) % 4);
+							var b = this.dirToAngle(cdir);
+							var aa = this.dirToAngle(cdir);
+							var ab = this.dirToAngle(newDir);
+							if(order1.dir == 1) {
+								if(b < a) b += 360;
+								if(ab < aa) ab += 360;
+								var ra = (a + (b - a) * elapsedTime) % 360;
+								cpos = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
+								cangle = (aa + (ab - aa) * elapsedTime) % 360;
+							} else {
+								if(b > a) a += 360;
+								if(ab > aa) aa += 360;
+								var ra = (a + (b - a) * elapsedTime) % 360;
+								cpos = rotPos.add(sea.Vector2Utils.vectorFromAngle(ra));
+								cangle = (aa + (ab - aa) * elapsedTime) % 360;
+							}
+						}
+					}
+					cdir = newDir;
+				}
+			}
+			accTime += eventTime;
+		}
+		return { position : cpos, dir : cdir, angle : cangle};
+	}
+	,moveToSimulatedTime: function(t) {
+		var dt = this.simulateTime(t);
+		this.position = dt.position;
+		this.dir = dt.dir;
+		this.angle = dt.angle;
 	}
 	,updatePath: function() {
 		var g = this.pathShape.graphics;
 		g.clear();
 		g.setStrokeStyle(0.05,"round");
 		g.beginStroke(createjs.Graphics.getRGB(17,69,117));
-		this.simulateTime(0);
-		g.moveTo(this.position.x,this.position.y);
-		var _g1 = 1, _g = this.orders.length + 1;
-		while(_g1 < _g) {
-			var i = _g1++;
-			this.simulateTime(i);
-			var p = this.position;
-			var order = this.orders[i - 1];
-			while(order.chained != null) order = order.chained;
+		var dt = this.simulateTime(0);
+		g.moveTo(dt.position.x,dt.position.y);
+		var accTime = 0.0;
+		var _g = 0, _g1 = this.orders;
+		while(_g < _g1.length) {
+			var order = _g1[_g];
+			++_g;
+			accTime += order.time != null?order.time:1;
+			dt = this.simulateTime(accTime);
+			console.log(dt);
+			var p = dt.position;
 			if(order.type == sea.OrderType.Move && order.dir != 2) {
 				if(order.dir == 0) g.lineTo(p.x,p.y); else {
-					var rotp = this.position.sub(sea.Vector2Utils.dirToVector(this.dir));
+					var rotp = p.sub(sea.Vector2Utils.dirToVector(dt.dir));
 					g.arcTo(rotp.x,rotp.y,p.x,p.y,1);
 				}
 			}

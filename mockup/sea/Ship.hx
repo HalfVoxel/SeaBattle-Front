@@ -30,7 +30,6 @@ class Ship implements HasPosition {
     var pathShape : Shape;
 
     public var orders : Array<Order>;
-
     var time = 0.0;
 
     public var maxOrderCount = 4;
@@ -127,121 +126,145 @@ class Ship implements HasPosition {
         //g.beginFill(Graphics.getRGB(255,0,0));
         //g.drawCircle(0,0,3);
         
-        simulateTime(0);
-        g.moveTo (position.x,position.y);
+        var dt = simulateTime(0);
+        g.moveTo (dt.position.x,dt.position.y);
         //var prevDir = dir;
-        for (i in 1...(orders.length+1)) {
-            simulateTime(i);
-            var p = position;
-            var order = orders[i-1];
-            while (order.chained != null) order = order.chained;
+        
+        var accTime = 0.0;
+        for (order in orders) {
+            accTime += order.time != null ? order.time : 1;
+            dt = simulateTime(accTime);
+            trace (dt);
+            var p = dt.position;
 
             if (order.type == OrderType.Move && order.dir != 2) {
                 if (order.dir == 0) {
                     g.lineTo (p.x,p.y);
                 } else {
-                    var rotp = position.sub(Vector2Utils.dirToVector(dir));
+                    var rotp = p.sub(Vector2Utils.dirToVector(dt.dir));
                     g.arcTo (rotp.x, rotp.y, p.x,p.y, 1);
                 }
             }
             //prevDir = dir;
         }
     }
-    public function simulateTime (t : Float) {
-        /*if (num == currentOrder) return;
 
-        if (num < currentOrder) {
-
-        }*/
-        t = t < 0 ? 0 : t;
-        t = t > orders.length ? orders.length : t;
-
-        if (t == 0) {
-            position = realPosition.copy();
-            dir = realDir;
-            angle = dirToAngle(dir);
-            return;
-        }
-
-        var orderBase = Math.floor (t);
-        position = realPosition.copy();
-        dir = realDir;
-
-        //trace ("Simulating time " + t + " with base " + orderBase);
-
-        for (i in 0...orderBase) {
-            var order = orders[i];
-            while (order.chained != null) order = order.chained;
-            if (order.type == OrderType.Move) {
-                if (order.dir != 0) {
-                    position = position.add (Vector2Utils.dirToVector(dir));
-                }
-                dir = (dir+order.dir+4) % 4;
-                position = position.add (Vector2Utils.dirToVector(dir));
-            }
-        }
-
-        angle = dirToAngle(dir);
-
-        t -= orderBase;
-        if (t > 0.001) {
-            var newPos = position.copy();
-            var order = orders[orderBase];
-            while (order.chained != null) {
-                trace ("Running chained order ");
-                order = order.chained;
-            }
-
-            var newDir = dir;
-            if (order.type == OrderType.Move) {
-                if (order.dir != 0) {
-                    newPos = newPos.add (Vector2Utils.dirToVector(newDir));
-                }
-                newDir = (newDir+order.dir+4) % 4;
-                newPos = newPos.add (Vector2Utils.dirToVector(dir));
-
-                if (order.dir == 0) {
-                    position = Vector2Utils.lerp (position, newPos, t);
-                } else {
-                    //Turning required
-                    var rotPos = position.add(Vector2Utils.dirToVector(newDir));
-                    var a = dirToAngle ((newDir+2) % 4);
-                    var b = dirToAngle (dir);
-
-                    var aa = dirToAngle (dir);
-                    var ab = dirToAngle (newDir);
-
-                    if (order.dir == 1) {
-                        //CW
-                        if (b < a) b += 360;
-                        if (ab < aa) ab += 360;
-
-                        var ra = (a + (b-a)*t) % 360;
-                        position = rotPos.add (Vector2Utils.vectorFromAngle(ra));
-                        angle = (aa + (ab-aa)*t) % 360;
-                    } else {
-                        //CCW
-                        if (b > a) a += 360;
-                        if (ab > aa) aa += 360;
-
-                        var ra = (a + (b-a)*t) % 360;
-                        position = rotPos.add (Vector2Utils.vectorFromAngle(ra));
-                        angle = (aa + (ab-aa)*t) % 360;
-                    }
-                }
-            }
-        }
+    public function moveToSimulatedTime (t : Float) {
+        var dt = simulateTime (t);
+        position = dt.position;
+        dir = dt.dir;
+        angle = dt.angle;
     }
 
-    /** NOTE, might fail on low FPS */
+    /**
+     * Simulate time. Assumes no complex orders, only move orders will be correctly simulated, other orders will be handled as Idle orders.
+     * Also assumes that this is during the players turn, i.e the ship has not performed any events yet.
+     * 
+     * @param  t :             Float Time to simulate, from start of turn.
+     */
+    public function simulateTime (t : Float) {
+
+        var cpos = realPosition.copy();
+        var cangle = dirToAngle(realDir);
+        var cdir = realDir;
+
+        var accTime = 0.0;
+        for (i in 0...orders.length) {
+            var order = orders[i];
+
+            var eventTime = order.time != null ? order.time : 1;
+
+            var elapsedTime = t - accTime;
+            elapsedTime = elapsedTime > eventTime ? eventTime : elapsedTime;
+
+            if (accTime < t) {
+                if (order.type == OrderType.Move) {
+                    
+                    var order = orders[i];
+                    while (order.chained != null) {
+                        trace ("Running chained order ");
+                        order = order.chained;
+                    }
+
+                    var newDir = cdir;
+                    var newPos = cpos.copy();
+
+                    if (order.type == OrderType.Move) {
+                        if (order.dir != 0) {
+                            newPos = newPos.add (Vector2Utils.dirToVector(newDir));
+                        }
+                        newDir = (newDir+order.dir+4) % 4;
+                        newPos = newPos.add (Vector2Utils.dirToVector(cdir));
+
+                        if (order.dir == 0) {
+                            cpos = Vector2Utils.lerp (cpos, newPos, elapsedTime);
+                        } else {
+                            //Turning required
+                            var rotPos = cpos.add(Vector2Utils.dirToVector(newDir));
+                            var a = dirToAngle ((newDir+2) % 4);
+                            var b = dirToAngle (cdir);
+
+                            var aa = dirToAngle (cdir);
+                            var ab = dirToAngle (newDir);
+
+                            if (order.dir == 1) {
+                                //CW
+                                if (b < a) b += 360;
+                                if (ab < aa) ab += 360;
+
+                                var ra = (a + (b-a)*elapsedTime) % 360;
+                                cpos = rotPos.add (Vector2Utils.vectorFromAngle(ra));
+                                cangle = (aa + (ab-aa)*elapsedTime) % 360;
+                            } else {
+                                //CCW
+                                if (b > a) a += 360;
+                                if (ab > aa) aa += 360;
+
+                                var ra = (a + (b-a)*elapsedTime) % 360;
+                                cpos = rotPos.add (Vector2Utils.vectorFromAngle(ra));
+                                cangle = (aa + (ab-aa)*elapsedTime) % 360;
+                            }
+                        }
+                    }
+
+                    cdir = newDir;
+                }
+            }
+
+
+            accTime += eventTime;
+        }
+
+        return {position: cpos, dir: cdir, angle: cangle};
+    }
+
     public function progressTime (time : Float) {
+        //var orderBase = Math.floor (time);
 
-        var orderBase = Math.floor (time);
+        //orderBase = orderBase > orders.length-1 ? orders.length-1 : orderBase;
+        //orderBase = orderBase < 0 ? 0 : orderBase;
 
-        orderBase = orderBase > orders.length-1 ? orders.length-1 : orderBase;
-        orderBase = orderBase < 0 ? 0 : orderBase;
+        var accTime = 0.0;
+        for (i in 0...orders.length) {
+            var t = orders[i].time != null ? orders[i].time : 1;
+            
+            if (!orders[i].executed) {
+                beginEvent (orders[i]);
+            }
 
-        if (orders.length > 0) {
+            if (accTime+t > time) {
+                simulateEvent (orders[i], time - accTime);
+                break;
+            } else {
+                if (!orders[i].completed) {
+                    completeEvent (orders[i]);
+                }
+            }
+            accTime += t;
+        }
+        
+
+        /*if (orders.length > 0) {
 
             var order = orders[orderBase];
             if (!order.executed) {
@@ -264,7 +287,103 @@ class Ship implements HasPosition {
             }
         }
 
-        simulateTime(time);
+        simulateTime(time);*/
+    }
+
+    function beginEvent (event : Order) {
+        if (event.executed) return;
+        event.executed = true;
+
+        trace ("Begun " + event.type);
+    }
+
+    /**
+     * Called when an event is completed.
+     * Should make sure that the object is at the correct state as if the simulateEvent function would have been run all the way to the end exactly
+     * and call any eventual effects at the end of the event.
+     * 
+     * @param  event :             Order Order to complete
+     */
+    function completeEvent (event : Order) {
+        if (event.completed) return;
+        event.completed = true;
+
+        trace ("Completed " + event.type);
+
+        switch (event.type) {
+        case OrderType.Move:
+            //Make up for a non continous simulation and simulate the event at end time
+            simulateEvent (event, 1);
+
+            realPosition = position.copy();
+
+            //Switch direction
+            dir = (dir + event.dir + 4) % 4;
+            realDir = dir;
+        default:
+        }
+    }
+
+    /**
+     * Simulate an event at time t after the event started.
+     * @param  event :             Order Event to simulate
+     * @param  t     :             Float Time relative to the start of the event
+     */
+    function simulateEvent (event : Order, t : Float) {
+
+        //trace ("Simulting... " + event.type + " " + t);
+
+        switch (event.type) {
+        case OrderType.Move:
+
+            position = realPosition.copy();
+            dir = realDir;
+            angle = dirToAngle (dir);
+
+            var newPos = position.copy();
+            var order = event;
+
+            var newDir = dir;
+            if (order.type == OrderType.Move) {
+                if (order.dir != 0) {
+                    newPos = newPos.add (Vector2Utils.dirToVector(newDir));
+                }
+                newDir = (newDir+order.dir+4) % 4;
+                newPos = newPos.add (Vector2Utils.dirToVector(dir));
+
+                if (order.dir == 0) {
+                    position = Vector2Utils.lerp (position, newPos, t);
+                } else {
+                    //Turning required
+                    var rotPos = position.add(Vector2Utils.dirToVector(newDir));
+                    var a = dirToAngle ((newDir+2) % 4);
+                    var b = dirToAngle (dir);
+
+                    var aa = dirToAngle (dir);
+                    var ab = dirToAngle (newDir);
+
+
+                    if (order.dir == 1) {
+                        //CW
+                        if (b < a) b += 360;
+                        if (ab < aa) ab += 360;
+
+                        var ra = (a + (b-a)*t) % 360;
+                        position = rotPos.add (Vector2Utils.vectorFromAngle(ra));
+                        angle = (aa + (ab-aa)*t) % 360;
+                    } else {
+                        //CCW
+                        if (b > a) a += 360;
+                        if (ab > aa) aa += 360;
+
+                        var ra = (a + (b-a)*t) % 360;
+                        position = rotPos.add (Vector2Utils.vectorFromAngle(ra));
+                        angle = (aa + (ab-aa)*t) % 360;
+                    }
+                }
+            }
+        default:
+        }
     }
 
     function dirToAngle (dir : Float) {

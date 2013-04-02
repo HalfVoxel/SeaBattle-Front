@@ -256,6 +256,10 @@ class Seabattle {
     static function turnOver () {
         playerTurn = false;
 
+        for (ship in ships) {
+            ship.moveToSimulatedTime(time);
+        }
+        
         var turn : sea.backend.Server.PlayerTurn = new sea.backend.Server.PlayerTurn();
         turn.playerIndex =  0;
         turn.ships = ships;
@@ -303,7 +307,12 @@ class Seabattle {
         deltaTime = (t-prevTime)*0.001;
         prevTime = t;
 
-        for (ship in ships) { ship.simulateTime(time); }
+
+        if (playerTurn) {
+            for (ship in ships) {
+                ship.moveToSimulatedTime(time);
+            }
+        }
 
         stage.scaleX = scale;
         stage.scaleY = scale;
