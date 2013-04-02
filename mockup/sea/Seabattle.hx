@@ -89,7 +89,8 @@ class Seabattle {
             {src:"assets/water.png", id:"water"},
             {src:"assets/marker.png", id:"marker"},
             {src:"assets/island.png", id:"island"},
-            {src:"assets/projectile.png", id:"projectile"}
+            {src:"assets/projectile.png", id:"projectile"},
+            {src:"assets/waterSplash.png", id:"waterSplash"}
         ];
 
         loader = new LoadQueue(false);
@@ -219,11 +220,11 @@ class Seabattle {
                     return;
                 case 'e'.code:
                     dir = 1;
-                    ship.pushOrder({type: OrderType.Fire, dir: dir});
+                    ship.pushOrder({type: OrderType.Fire, dir: dir, endTime: 0.7});
                     return;
                 case 'q'.code:
                     dir = -1;
-                    ship.pushOrder({type: OrderType.Fire, dir: dir});
+                    ship.pushOrder({type: OrderType.Fire, dir: dir, endTime: 0.7});
                     return;
                 case 'r'.code:
                     selectShip ((selectedShip+(event.shiftKey?-1:1) + ships.length) % ships.length);
@@ -259,7 +260,7 @@ class Seabattle {
         for (ship in ships) {
             ship.moveToSimulatedTime(time);
         }
-        
+
         var turn : sea.backend.Server.PlayerTurn = new sea.backend.Server.PlayerTurn();
         turn.playerIndex =  0;
         turn.ships = ships;
@@ -272,16 +273,21 @@ class Seabattle {
     static function simulateMoves () {
         if (playerTurn) throw "InvalidGameState: Player turn when simulating moves.";
 
-        var maxOrders = 0;
+        var maxTime = 0;
         for (i in 0...ships.length) {
-            maxOrders = cast Math.max (maxOrders, ships[i].orders.length);
+            var t = 0.0;
+            for (event in ships[i].orders) t += event.time != null ? event.time : 1;
+            maxTime = Math.ceil (Math.max (maxTime, t));
         }
 
+        //To enable simulations to complete
+        maxTime += 1;
+
         createjs.tweenjs.Tween.removeTweens(Seabattle);
-        targetTime = maxOrders;
+        targetTime = maxTime;
         time = 0;
         var tw1 = createjs.tweenjs.Tween.get(Seabattle);
-        var tw = tw1.to({time: targetTime}, maxOrders*timeScale);
+        var tw = tw1.to({time: targetTime}, maxTime*timeScale);
         tw.call (endSimulation);
         untyped tw.addEventListener ("change", progressTime);
 

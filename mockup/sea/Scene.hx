@@ -32,4 +32,17 @@ class Scene {
         }
         layers[layer].addChild (obj);
     }
+
+    public static function removeFromLayer (obj : DisplayObject, layer : Int) {
+        if (layer > 255) throw "LotsOfLayersException";
+        if (layer < 0) throw "NegativeLayerException";
+
+        if (layer >= layers.length) {
+            throw "NoSuchLayerException";
+        }
+
+        if (!layers[layer].removeChild (obj)) {
+            throw "ChildNotInLayerException";
+        }
+    }
 }

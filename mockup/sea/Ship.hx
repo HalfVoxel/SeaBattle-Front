@@ -249,7 +249,7 @@ class Ship implements HasPosition {
             var t = orders[i].time != null ? orders[i].time : 1;
             
             if (!orders[i].executed) {
-                beginEvent (orders[i]);
+                beginEvent (orders[i], accTime);
             }
 
             if (accTime+t > time) {
@@ -290,11 +290,17 @@ class Ship implements HasPosition {
         simulateTime(time);*/
     }
 
-    function beginEvent (event : Order) {
+    function beginEvent (event : Order, time : Float) {
         if (event.executed) return;
         event.executed = true;
 
         trace ("Begun " + event.type);
+
+        switch (event.type) {
+        case OrderType.Fire:
+            new Projectile (this, event, time);
+        default:
+        }
     }
 
     /**
