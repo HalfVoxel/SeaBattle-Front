@@ -47,7 +47,7 @@ class Effect {
 	public function update () {
 
 		var frame = Math.floor ((sea.Seabattle.time - startTime)  * bmpAnimation.spriteSheet.getAnimation("idle").frequency);
-		trace (frame);
+		
 		bmpAnimation.currentAnimationFrame = frame % bmpAnimation.spriteSheet.getNumFrames ();
 
 		if ((oneShot && frame >= bmpAnimation.spriteSheet.getNumFrames ()) || (lifetime >= 0 && startTime + lifetime <= sea.Seabattle.time)) {

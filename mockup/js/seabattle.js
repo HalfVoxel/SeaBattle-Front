@@ -348,7 +348,6 @@ sea.Effect.prototype = {
 	}
 	,update: function() {
 		var frame = Math.floor((sea.Seabattle.time - this.startTime) * this.bmpAnimation.spriteSheet.getAnimation("idle").frequency);
-		console.log(frame);
 		this.bmpAnimation.currentAnimationFrame = frame % this.bmpAnimation.spriteSheet.getNumFrames();
 		if(this.oneShot && frame >= this.bmpAnimation.spriteSheet.getNumFrames() || this.lifetime >= 0 && this.startTime + this.lifetime <= sea.Seabattle.time) this.destroy();
 		this.bmpAnimation.x = this.position.x;
@@ -436,7 +435,6 @@ sea.Projectile.prototype = $extend(sea.Sprite.prototype,{
 		var factor = sea.Seabattle.time - this.startTime;
 		if(sea.Seabattle.time >= this.startTime + this.hitTime) {
 			this.destroy();
-			console.log("BANG!");
 			if(sea.Projectile.splashSpriteSheet == null) sea.Projectile.splashSpriteSheet = new createjs.SpriteSheet({ images : ["assets/waterSplash.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 5}, animations : { idle : [0,4,"idle",12]}});
 			var eff = new sea.Effect(sea.Projectile.splashSpriteSheet,7,true);
 			eff.position = this.position.copy();
@@ -1060,7 +1058,6 @@ sea.Ship = function(entityIndex) {
 	this.bmpAnimation.y = 32;
 	this.bmpAnimation.scaleX = this.bmpAnimation.scaleY = 0.015625;
 	this.bmpAnimation.currentAnimationFrame = Math.random() * sea.Ship.spriteSheet.getNumFrames("idle");
-	console.log(Math.random() * sea.Ship.spriteSheet.getNumFrames("idle"));
 	sea.Scene.addToLayer(this.bmpAnimation,3);
 	this.bmpAnimation.addEventListener("tick",$bind(this,this.update));
 	this.pathShape = new createjs.Shape();
@@ -1113,7 +1110,6 @@ sea.Ship.prototype = {
 	,completeEvent: function(event) {
 		if(event.completed) return;
 		event.completed = true;
-		console.log("Completed " + Std.string(event.type));
 		switch( (event.type)[1] ) {
 		case 0:
 			this.simulateEvent(event,1);
@@ -1127,7 +1123,6 @@ sea.Ship.prototype = {
 	,beginEvent: function(event,time) {
 		if(event.executed) return;
 		event.executed = true;
-		console.log("Begun " + Std.string(event.type));
 		switch( (event.type)[1] ) {
 		case 1:
 			new sea.Projectile(this,event,time);
@@ -1222,7 +1217,6 @@ sea.Ship.prototype = {
 			++_g;
 			accTime += order.time != null?order.time:1;
 			dt = this.simulateTime(accTime);
-			console.log(dt);
 			var p = dt.position;
 			if(order.type == sea.OrderType.Move && order.dir != 2) {
 				if(order.dir == 0) g.lineTo(p.x,p.y); else {

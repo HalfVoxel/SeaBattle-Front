@@ -71,7 +71,6 @@ class Ship implements HasPosition {
 
         // have each monster start at a specific frame
         bmpAnimation.currentAnimationFrame = cast Math.random()*spriteSheet.getNumFrames("idle");
-        trace (Math.random()*spriteSheet.getNumFrames("idle"));
         //Seabattle.stage.addChild(bmpAnimation);
         sea.Scene.addToLayer(bmpAnimation, 3);
         bmpAnimation.addEventListener ("tick", update);
@@ -98,7 +97,6 @@ class Ship implements HasPosition {
     public function pushOrder (order : Order) : Bool {
         if (orders.length < maxOrderCount) {
             orders.push (order);
-            //trace (order);
             
             updatePath ();
             return true;
@@ -134,7 +132,6 @@ class Ship implements HasPosition {
         for (order in orders) {
             accTime += order.time != null ? order.time : 1;
             dt = simulateTime(accTime);
-            trace (dt);
             var p = dt.position;
 
             if (order.type == OrderType.Move && order.dir != 2) {
@@ -294,7 +291,7 @@ class Ship implements HasPosition {
         if (event.executed) return;
         event.executed = true;
 
-        trace ("Begun " + event.type);
+        //trace ("Begun " + event.type);
 
         switch (event.type) {
         case OrderType.Fire:
@@ -314,7 +311,7 @@ class Ship implements HasPosition {
         if (event.completed) return;
         event.completed = true;
 
-        trace ("Completed " + event.type);
+        //trace ("Completed " + event.type);
 
         switch (event.type) {
         case OrderType.Move:

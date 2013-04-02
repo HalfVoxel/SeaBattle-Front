@@ -40,9 +40,6 @@ class Projectile extends Sprite {
         if (sea.Seabattle.time >= startTime + hitTime) {
             destroy ();
 
-            trace ("BANG!");
-
-
             if (splashSpriteSheet == null) {
                 // create spritesheet and assign the associated data.
                 splashSpriteSheet = new SpriteSheet({
