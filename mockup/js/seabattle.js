@@ -437,7 +437,7 @@ sea.Projectile.prototype = $extend(sea.Sprite.prototype,{
 		if(sea.Seabattle.time >= this.startTime + this.hitTime) {
 			this.destroy();
 			console.log("BANG!");
-			if(sea.Projectile.splashSpriteSheet == null) sea.Projectile.splashSpriteSheet = new createjs.SpriteSheet({ images : ["assets/waterSplash.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 4}, animations : { idle : [0,3,"idle",15]}});
+			if(sea.Projectile.splashSpriteSheet == null) sea.Projectile.splashSpriteSheet = new createjs.SpriteSheet({ images : ["assets/waterSplash.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 5}, animations : { idle : [0,4,"idle",12]}});
 			var eff = new sea.Effect(sea.Projectile.splashSpriteSheet,7,true);
 			eff.position = this.position.copy();
 		}

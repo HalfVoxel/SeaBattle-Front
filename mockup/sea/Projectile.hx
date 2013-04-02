@@ -49,9 +49,9 @@ class Projectile extends Sprite {
                     // image to use
                     images: ["assets/waterSplash.png"], 
                     // width, height & registration point of each sprite
-                    frames: {width: 64, height: 64, regX: 32, regY: 32, count: 4}, 
+                    frames: {width: 64, height: 64, regX: 32, regY: 32, count: 5}, 
                     animations: {
-                        idle: [0, 3, "idle",15]
+                        idle: [0, 4, "idle",12]
                     }
                 });
             }
