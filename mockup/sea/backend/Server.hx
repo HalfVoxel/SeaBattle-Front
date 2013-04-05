@@ -12,9 +12,10 @@ class Server {
     public var width : Int;
     public var height : Int;
 
-    public var players = 1;
+    public var players = 2;
 
-    var ships : Array<Ship>;
+
+    public var ships : Array<Ship>;
 
     var processedPlayers = 0;
 
@@ -41,11 +42,12 @@ class Server {
         
         for (ship in turn.ships) {
             if (ship.entityIndex < 0 || ship.entityIndex >= ships.length) {
-                throw "IndexOutOfRange";
+                throw "IndexOutOfRange " + ship.entityIndex + "/"+ships.length;
             }
 
             if (ships[ship.entityIndex].playerIndex != turn.playerIndex) {
-                throw "InfiltrationException";
+                //Screw security, this is a javascript server ffs
+                //throw "InfiltrationException";
             }
 
             var serverShip = ships[ship.entityIndex];
@@ -62,7 +64,12 @@ class Server {
 
     static public inline var TIMESTEPS = 8;
 
+    public function hasSentResults () {
+        for (ship in ships) ship.betweenTurnReset ();
+    }
+
     private function processAllMoves () {
+
         var maxTime = 0;
         for (ship in ships) {
             maxTime = maxTime > ship.orders.length ? maxTime : ship.orders.length;
@@ -73,10 +80,16 @@ class Server {
         }
 
 
+
         for (i in 0...maxTime) {
 
             for (ship in ships) {
                 ship.beginOrder (i);
+            }
+
+            for (ship in ships) {
+                var v = i >= ship.orders.length ? {type:OrderType.Idle} : ship.orders[i];
+                ship.executeOrder (i);
             }
 
             for (timestep in 0...TIMESTEPS) {
@@ -98,10 +111,14 @@ class Server {
             }
 
             for (ship in ships) {
-                var v = i >= ship.orders.length ? {type:OrderType.Idle} : ship.orders[i];
-                ship.executeOrder (i);
+                ship.executeOrder2 (i);
+            }
+
+            for (ship in ships) {
+                ship.executeOrder3 (i);
             }
         }
+
 
         for (ship in ships) {
             ship.finalizeTurn ();
@@ -111,7 +128,8 @@ class Server {
     public function getResult (playerIndex : Int) : ResultData {
         var filtered = new Array<Ship>();
         for (ship in ships) {
-            if (ship.playerIndex == playerIndex) {
+            //if (ship.playerIndex == playerIndex) {
+            if (ship.alive()) {
                 filtered.push(ship);
             }
         }
@@ -139,6 +157,10 @@ class Server {
 
         ships.push (new Ship (this, 0, ships.length, new Vector2(Std.int(width/4),Std.int(height/2)-1)));
         ships.push (new Ship (this, 0, ships.length, new Vector2(Std.int(width/4),Std.int(height/2)-2)));
+
+        ships.push (new Ship (this, 1, ships.length, new Vector2(Std.int(3*width/4),Std.int(height/2)-1)));
+        ships.push (new Ship (this, 1, ships.length, new Vector2(Std.int(3*width/4),Std.int(height/2)-2)));
+        //trace ("Created " + ships.length + " ships");
     }
 }
 

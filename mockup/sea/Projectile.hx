@@ -15,10 +15,10 @@ class Projectile extends Sprite {
     var hitTime : Float;
     var startPosition : Vector2;
     var dir : Vector2;
-    var speed = 10.0;
+    var speed = 5;
     var startTime : Float;
 
-    static var splashSpriteSheet : SpriteSheet;
+    public static var splashSpriteSheet : SpriteSheet;
 
     public function new (source : Ship, event : Order, time : Float) {
         super ("projectile", 4);

@@ -10,6 +10,7 @@ class Effect {
 	var bmpAnimation : BitmapAnimation;
 
 	public var position : Vector2;
+    public var rotation : Float;
 
 	public var lifetime : Float = -1;
 	public var oneShot : Bool;
@@ -18,10 +19,10 @@ class Effect {
 	var startTime : Float;
 
 	public function new (spriteSheet : SpriteSheet, layer : Int, oneShot = false) {
-    	
+    	position = new Vector2(0,0);
     	this.layer = layer;
     	this.oneShot = oneShot;
-    	startTime = sea.Seabattle.time;
+    	startTime = sea.Seabattle.realTime;
 
         // create a BitmapAnimation instance to display and play back the sprite sheet:
         bmpAnimation = new BitmapAnimation(spriteSheet);
@@ -45,8 +46,7 @@ class Effect {
 	}
 
 	public function update () {
-
-		var frame = Math.floor ((sea.Seabattle.time - startTime)  * bmpAnimation.spriteSheet.getAnimation("idle").frequency);
+		var frame = Math.floor ((sea.Seabattle.realTime - startTime)  * bmpAnimation.spriteSheet.getAnimation("idle").frequency);
 		
 		bmpAnimation.currentAnimationFrame = frame % bmpAnimation.spriteSheet.getNumFrames ();
 
@@ -56,6 +56,7 @@ class Effect {
 
 		bmpAnimation.x = position.x;
 		bmpAnimation.y = position.y;
+        bmpAnimation.rotation = rotation;
 	}
 
 	public function destroy () {

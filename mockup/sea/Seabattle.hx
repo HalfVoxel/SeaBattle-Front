@@ -36,8 +36,10 @@ class Seabattle {
 
     static var prevTime : Float = 0;
     public static var deltaTime : Float = 1/60.0;
+    public static var realTime : Float = 0;
 
-    public static var playerTurn = true;
+    public static var playerTurn = 0;
+    public static var players = 2;
 
     static public inline var PIXEL_DENSITY = 64;
 
@@ -57,11 +59,33 @@ class Seabattle {
         canvas.css("height", h + "px");
     }
 
+    static function selectShipDir (dir : Int) {
+        for (i in 1...ships.length) {
+            if (ships[(selectedShip+dir*i+ships.length)%ships.length].playerIndex == playerTurn) {
+                selectShip ((selectedShip+dir*i+ships.length)%ships.length);
+                break;
+            }
+        }
+    }
+
     static function selectShip (i : Int) {
         selectedShip = i;
         if (selectedShip >= 0 && selectedShip < ships.length) {
-            marker.target = ships[selectedShip];
+            if (ships[selectedShip].playerIndex != playerTurn) {
+                selectShipDir(1);
+            } else {
+                marker.target = ships[selectedShip];
+                offset = marker.target.position.copy();
+                //createjs.tweenjs.Tween.get(offset).to({x: 4, y:5}, 100);
+            }
+        } else {
+            selectShip (0);
         }
+    }
+
+    public static function removeShip (ship : Ship) {
+        ships.remove(ship);
+        selectShip(selectedShip);
     }
 
     static function main () {
@@ -90,10 +114,12 @@ class Seabattle {
             {src:"assets/marker.png", id:"marker"},
             {src:"assets/island.png", id:"island"},
             {src:"assets/projectile.png", id:"projectile"},
-            {src:"assets/waterSplash.png", id:"waterSplash"}
+            {src:"assets/waterSplash.png", id:"waterSplash"},
+            {src:"assets/shipcrash.mp3", id:"shipcrashfx"},
+            {src:"assets/shipdestroy.png",id:"shipdestroy"}
         ];
-
         loader = new LoadQueue(false);
+        loader.installPlugin(createjs.soundjs.Sound);
         loader.onFileLoad = handleFileLoad;
         loader.onComplete = setup;
         loader.loadManifest(manifest);
@@ -104,7 +130,7 @@ class Seabattle {
         trace ("Loading Complete");
         setupBackground ();
 
-        stage.enableDOMEvents(true);
+        stage.enableDOMEvents(false);
         //stage.enableMouseOver(10);
         
         Ticker.addListener(tick);
@@ -144,7 +170,8 @@ class Seabattle {
     }
 
     static function processResult () {
-        var result = server.getResult (0);
+        var result = server.getResult (playerTurn);
+        for (ship in ships) ship.orders = null;
         for (source in result.ships) {
             var s = null;
             for (ship in ships) {
@@ -159,9 +186,16 @@ class Seabattle {
                 s = new Ship (source.entityIndex);
                 s.realPosition = source.position.copy();
                 s.realDir = source.dir;
+                s.playerIndex = source.playerIndex;
                 ships.push(s);
             }
-            s.orders = source.orders;
+            s.orders = source.orders.copy();
+            //s.realPosition = source.position;
+            //s.realDir = source.dir;
+            s.beginTurn();
+        }
+        for (ship in ships) if (ship.orders == null) {
+            throw "UndeadShipException";
         }
     }
     static function handleFileLoad(event) {
@@ -194,11 +228,26 @@ class Seabattle {
                 return;
         }
 
-        //Cannot do anything
-        if (!playerTurn) return;
+        //Cannot do anything, simulating
+        if (playerTurn == players) return;
+
+        switch(key) {
+        case 'r'.code:
+            selectShipDir (event.shiftKey?-1:1);
+            targetTime = ships[selectedShip].orders.length;
+            createjs.tweenjs.Tween.removeTweens(Seabattle);
+            createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
+
+            event.preventDefault ();
+            return;
+        case ' '.code:
+            turnOver ();
+        }
 
         if (selectedShip >= 0 && selectedShip < ships.length) {
             var ship = ships[selectedShip];
+            if (ship.playerIndex != playerTurn) return;
+
             var dir = -2;
             switch (key) {
                 case 'a'.code:
@@ -226,16 +275,6 @@ class Seabattle {
                     dir = -1;
                     ship.pushOrder({type: OrderType.Fire, dir: dir, endTime: 0.7});
                     return;
-                case 'r'.code:
-                    selectShip ((selectedShip+(event.shiftKey?-1:1) + ships.length) % ships.length);
-                    targetTime = ships[selectedShip].orders.length;
-                    createjs.tweenjs.Tween.removeTweens(Seabattle);
-                    createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
-
-                    event.preventDefault ();
-                    return;
-                case ' '.code:
-                    turnOver ();
                 default:
                     return;
             }
@@ -255,23 +294,41 @@ class Seabattle {
     }
 
     static function turnOver () {
-        playerTurn = false;
+
+        trace ("Turn is over for player " + playerTurn);
+
+        var turn : sea.backend.Server.PlayerTurn = new sea.backend.Server.PlayerTurn();
+        turn.playerIndex =  playerTurn;
+        turn.ships = ships;
+
+        server.processTurn (turn);
+
+        playerTurn++;
+
+        if (playerTurn != players) {
+            targetTime = 0;
+            createjs.tweenjs.Tween.removeTweens(Seabattle);
+            createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
+
+            
+            processResult();
+            selectShip (0);
+            return;
+        }
 
         for (ship in ships) {
             ship.moveToSimulatedTime(time);
         }
-
-        var turn : sea.backend.Server.PlayerTurn = new sea.backend.Server.PlayerTurn();
-        turn.playerIndex =  0;
-        turn.ships = ships;
-
-        server.processTurn (turn);
+        
         processResult();
         simulateMoves ();
+
+        //Calling back to emulate that the server has sent all results
+        server.hasSentResults ();
     }
 
     static function simulateMoves () {
-        if (playerTurn) throw "InvalidGameState: Player turn when simulating moves.";
+        if (playerTurn != players) throw "InvalidGameState: Player turn when simulating moves.";
 
         var maxTime = 0;
         for (i in 0...ships.length) {
@@ -305,25 +362,37 @@ class Seabattle {
         }
         time = 0;
         targetTime = 0;
-        playerTurn = true;
+        playerTurn = 0;
+        selectShip(0);
     }
 
     static function tick () {
         var t = Date.now().getTime();
+        realTime = t*0.001;
         deltaTime = (t-prevTime)*0.001;
         prevTime = t;
+        
 
 
-        if (playerTurn) {
+        if (playerTurn != players) {
             for (ship in ships) {
-                ship.moveToSimulatedTime(time);
+                ship.moveToSimulatedTime(playerTurn == ship.playerIndex ? time : 0);
             }
         }
 
         stage.scaleX = scale;
         stage.scaleY = scale;
-        stage.x = offset.x;
-        stage.y = offset.y;
+
+        if (marker != null && marker.target != null) {
+            offset.x = marker.position.x;
+            offset.y = marker.position.y;
+        }
+
+        var dt = deltaTime;
+        if (dt > 1) dt = 1;
+
+        stage.x = stage.x + ((-offset.x*scale + stage.canvas.width/2) - stage.x)*dt*10;
+        stage.y = stage.y + ((-offset.y*scale + stage.canvas.height/2)- stage.y)*dt*10;
         stage.update();
     }
 

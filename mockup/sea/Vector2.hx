@@ -37,6 +37,14 @@ class Vector2 {
         return new Vector2(-x, -y);
     }
 
+    public function magnitude () : Float {
+        return Math.sqrt(x*x + y*y);
+    }
+
+    public function sqrMagnitude () : Float {
+        return x*x + y*y;
+    }
+
     public function new (x,y : Float) {
         this.x = x;
         this.y = y;

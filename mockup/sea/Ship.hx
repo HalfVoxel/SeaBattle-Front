@@ -22,10 +22,12 @@ class Ship implements HasPosition {
     public var dir : Int = 0;
     public var angle : Float = 0;
     public var entityIndex : Int;
+    public var playerIndex : Int;
 
     var bmpAnimation : BitmapAnimation;
 
     static var spriteSheet : SpriteSheet;
+    static var destroySpriteSheet : SpriteSheet;
 
     var pathShape : Shape;
 
@@ -80,6 +82,12 @@ class Ship implements HasPosition {
         sea.Scene.addToLayer(pathShape,2);
     }
 
+    public function destroy () {
+        sea.Scene.removeFromLayer (pathShape, 2);
+        sea.Scene.removeFromLayer (bmpAnimation, 3);
+        sea.Seabattle.removeShip(this);
+    }
+
     public function endSimulation () {
         progressTime(orders.length);
         untyped orders.length = 0;
@@ -91,7 +99,15 @@ class Ship implements HasPosition {
     public function update () {
         bmpAnimation.x = position.x;
         bmpAnimation.y = position.y;
-        bmpAnimation.rotation = angle+90;//dirToAngle(dir) + 90;
+        bmpAnimation.rotation = angle;//dirToAngle(dir) + 90;
+    }
+
+    /**
+     * Clear varius settings and screen effects when staring a new turn (could be the opponents).
+     */
+    public function beginTurn () {
+        //Nothing much to do, almost everything has been done for us
+        pathShape.graphics.clear();
     }
 
     public function pushOrder (order : Order) : Bool {
@@ -314,6 +330,24 @@ class Ship implements HasPosition {
         //trace ("Completed " + event.type);
 
         switch (event.type) {
+        case OrderType.Collide:
+            if (destroySpriteSheet == null) {
+                // create spritesheet and assign the associated data.
+                destroySpriteSheet = new SpriteSheet({
+                    // image to use
+                    images: ["assets/shipdestroy.png"], 
+                    // width, height & registration point of each sprite
+                    frames: {width: 64, height: 64, regX: 32, regY: 32, count: 11}, 
+                    animations: {
+                        idle: [0, 11, "idle",4]
+                    }
+                });
+            }
+            var eff = new sea.Effect (destroySpriteSheet,3,true);
+            eff.position = position.copy();
+            eff.rotation = angle;
+            sea.Sound.play("shipcrashfx");
+            destroy ();
         case OrderType.Move:
             //Make up for a non continous simulation and simulate the event at end time
             simulateEvent (event, 1);
@@ -337,6 +371,10 @@ class Ship implements HasPosition {
         //trace ("Simulting... " + event.type + " " + t);
 
         switch (event.type) {
+        case OrderType.Collide:
+            if (event.chained != null) {
+                simulateEvent (event.chained, t);
+            }
         case OrderType.Move:
 
             position = realPosition.copy();

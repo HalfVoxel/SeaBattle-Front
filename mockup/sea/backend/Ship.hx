@@ -23,6 +23,11 @@ class Ship {
 
     public var shape : Polygon;
 
+    public var ammunition : Int = 5;
+    public var range : Int = 5;
+    var aliveFlag = true;
+    var aliveFlagTurn = true;
+
     public function new (server : Server, playerIndex : Int, entityIndex : Int, ?initPos : Vector2) {
         destroyed = 0;
         this.server = server;
@@ -33,12 +38,18 @@ class Ship {
         orders = new Array<Order>();
 
         var verts = new Array<Vector2>();
-        verts.push (new Vector2(-0.3,-0.4));
-        verts.push (new Vector2( 0.3,-0.4));
-        verts.push (new Vector2( 0.3, 0.4));
-        verts.push (new Vector2(-0.3, 0.4));
+        verts.push (new Vector2(-0.13,-0.42));
+        verts.push (new Vector2( 0.13,-0.42));
+        verts.push (new Vector2( 0.13, 0.42));
+        verts.push (new Vector2(-0.13, 0.42));
 
         shape = new Polygon (verts);
+
+        yields = new Array<Dynamic>();
+    }
+
+    public function betweenTurnReset () {
+        aliveFlagTurn = aliveFlag;
     }
 
     public function initTurn () {
@@ -151,38 +162,106 @@ class Ship {
         }
     }
 */
+
+    public function alive () {
+        return aliveFlagTurn;
+    }
+
     public function executeOrder (orderIndex : Int) {
         if (destroyed < 1) {
-            if (orderIndex < orders.length) {
-
-                simulateTime (orderIndex, 1);
-                position = simPosition.copy();
-                dir = simDir;
-                //server.getMove(this,order).execute(this);
-                orderResult.push (orders[orderIndex]);
-            } else {
-                var v = {type:OrderType.Idle};
-                orderResult.push(v);
+            if (orderIndex >= orders.length) {
+                orderResult.push ({type:OrderType.Idle});
+                return;
             }
+
+            
+                //server.getMove(this,order).execute(this);
+                
+            //}
+
+            var order = orders[orderIndex];
+            switch (order.type) {
+            case OrderType.Fire:
+                var d = Vector2Utils.dirToVector((dir+order.dir+4)%4);
+                var hit = false;
+                for (i in 0...range) {
+                    var p = d.mult(i+1).add(position);
+
+                    for (ship in server.ships) {
+                        if (ship.alive()) {
+                            if (ship.position.sub(p).sqrMagnitude() < 0.1*0.1) {
+                                //HIT
+                                yield (function () {ship.onCollision(this, orderIndex, (i+1)/range);});
+                                var o = orders[orderIndex];
+                                o.endTime = (i+1)/range;
+                                orderResult.push (o);
+                                break;
+                            }
+                        }
+                    }
+                    if (hit) break;
+                }
+                if (!hit) orderResult.push (orders[orderIndex]);
+            default:
+                orderResult.push (orders[orderIndex]);
+            }
+
+
+
         }
         if (destroyed != 0) destroyed++;
     }
 
+    var yields : Array<Dynamic>;
+    public function yield (fn : Dynamic) {
+        yields.push(fn);
+    }
+
+    public function executeOrder2 (orderIndex : Int) {
+        while(yields.length > 0) {
+            yields.shift()();
+        }
+
+    }
+
+    public function executeOrder3 (orderIndex : Int) {
+
+        if (destroyed > 0) {
+            aliveFlag = false;
+            return;
+        }
+
+        if (orderIndex >= orders.length) return;
+
+        simulateTime (orderIndex, 1);
+        position = simPosition.copy();
+        dir = simDir;
+
+    }
+
     public function onCollision (other : Ship, orderIndex : Int, time : Float) {
+
+        if (destroyed > 0) return;
+
         trace ("Ship " + entityIndex + " collided with " + other.entityIndex + " at " + time);
+
+        
 
         //Push collision order
         
         var od : Order = {type: OrderType.Collide, time: time};
 
-        if (orderIndex < orders.length) {
-            od.chained = orders[orderIndex];
-            trace (orders[orderIndex]);
-        }
+        //if (orderIndex < orders.length) {
+            od.chained = orderResult.pop();
+            //trace ("CHAINING " + orders[orderIndex]);
+        //} else {
+            //od.chained = {type: OrderType.Idle};
+        //}
+
         orderResult.push (od);
 
         //Prevents further simulation of this ship
-        destroyed++;
+        destroyed+=1;
     }
 
     static function dirToAngle (dir : Float) {
