@@ -17,10 +17,15 @@ class Seabattle {
 
     public static var ships = new Array<Ship>();
     public static var stage;
-
+    static var worldContainer : createjs.easeljs.Container;
     public static var scale = 64;
     public static var offset = new Vector2( 1, 1);
     static var currentOffset = new Vector2( 1, 1);
+
+    public static var gui : sea.StatusGUI;
+
+    static public inline var ZOOM_NORMAL = 64;
+    static public inline var ZOOM_OUT = 32;
 
     public static var selectedShip = 0;
 
@@ -107,7 +112,7 @@ class Seabattle {
         stage.canvas.height = js.Lib.window.innerHeight;
 
         sea.Scene.init (stage);
-
+        worldContainer = sea.Scene.getWorldContainer();
         assets = new Hash<Dynamic> ();
 
         var manifest = [
@@ -165,6 +170,7 @@ class Seabattle {
             }
         }
 
+        gui = new sea.StatusGUI();
         /*for (i in 0...5) {
             var isl = new sea.Island (new Vector2( Std.int(Math.random()*12), Std.int (Math.random()*12)));
         }*/
@@ -203,6 +209,8 @@ class Seabattle {
         for (ship in ships) if (ship.orders == null) {
             throw "UndeadShipException";
         }
+
+        gui.setPlayerTurn(playerTurn);
     }
     static function handleFileLoad(event) {
         assets.set(event.item.id, event.item);
@@ -333,7 +341,7 @@ class Seabattle {
         for (ship in ships) {
             ship.moveToSimulatedTime(time);
         }
-        
+
         processResult();
         simulateMoves ();
 
@@ -342,7 +350,7 @@ class Seabattle {
     }
 
     static function simulateMoves () {
-        if (playerTurn != players) throw "InvalidGameState: Player turn when simulating moves.";
+        //if (playerTurn != players) throw "InvalidGameState: Player turn when simulating moves.";
 
         var maxTime = 0;
         for (i in 0...ships.length) {
@@ -361,7 +369,7 @@ class Seabattle {
         var tw = tw1.wait(700).to({time: targetTime}, maxTime*timeScale);
         //New tween
         tw1 = createjs.tweenjs.Tween.get(Seabattle);
-        tw1.to({scale: scale*0.5}, timeScale*2, Ease.sineInOut);
+        tw1.to({scale: ZOOM_OUT}, timeScale*2, Ease.sineInOut);
 
         tw.call (endSimulation);
         untyped tw.addEventListener ("change", progressTime);
@@ -381,8 +389,10 @@ class Seabattle {
         time = 0;
         targetTime = 0;
         playerTurn = 0;
+        gui.setPlayerTurn(playerTurn);
+
         var tw1 = createjs.tweenjs.Tween.get(Seabattle);
-        tw1.to({scale: scale*2}, timeScale*2, Ease.sineInOut);
+        tw1.to({scale: ZOOM_NORMAL}, timeScale*2, Ease.sineInOut);
         selectShip(0);
     }
 
@@ -400,8 +410,8 @@ class Seabattle {
             }
         }
 
-        stage.scaleX = scale;
-        stage.scaleY = scale;
+        worldContainer.scaleX = scale;
+        worldContainer.scaleY = scale;
 
         if (marker != null && marker.target != null) {
             offset.x = marker.position.x;
@@ -413,8 +423,8 @@ class Seabattle {
 
         currentOffset = Vector2Utils.lerp(currentOffset, offset, dt*10);
 
-        stage.x = -currentOffset.x*scale + stage.canvas.width/2;//stage.x + ((-offset.x*scale + stage.canvas.width/2) - stage.x)*dt*10;
-        stage.y = -currentOffset.y*scale + stage.canvas.height/2;//stage.y + ((-offset.y*scale + stage.canvas.height/2)- stage.y)*dt*10;
+        worldContainer.x = -currentOffset.x*scale + stage.canvas.width/2;//stage.x + ((-offset.x*scale + stage.canvas.width/2) - stage.x)*dt*10;
+        worldContainer.y = -currentOffset.y*scale + stage.canvas.height/2;//stage.y + ((-offset.y*scale + stage.canvas.height/2)- stage.y)*dt*10;
 
         stage.update();
     }

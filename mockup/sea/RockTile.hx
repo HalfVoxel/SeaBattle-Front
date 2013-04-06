@@ -16,7 +16,7 @@ class RockTile extends Effect {
                 // width, height & registration point of each sprite
                 frames: {width: 64, height: 64, regX: 32, regY: 32, count: 5}, 
                 animations: {
-                    idle: [0, 5, "idle",4]
+                    idle: [0, 5, "idle",2]
                 }
             });
         }

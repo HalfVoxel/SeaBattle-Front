@@ -275,7 +275,7 @@ sea.Projectile.prototype = $extend(sea.Sprite.prototype,{
 	,__class__: sea.Projectile
 });
 sea.RockTile = function(p) {
-	if(sea.RockTile.spriteSheet == null) sea.RockTile.spriteSheet = new createjs.SpriteSheet({ images : ["assets/rocks.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 5}, animations : { idle : [0,5,"idle",4]}});
+	if(sea.RockTile.spriteSheet == null) sea.RockTile.spriteSheet = new createjs.SpriteSheet({ images : ["assets/rocks.png"], frames : { width : 64, height : 64, regX : 32, regY : 32, count : 5}, animations : { idle : [0,5,"idle",2]}});
 	sea.Effect.call(this,sea.RockTile.spriteSheet,2);
 	this.position = p;
 	this.rotation = (Math.random() * 4 | 0) * 90;
@@ -287,28 +287,52 @@ sea.RockTile.prototype = $extend(sea.Effect.prototype,{
 });
 sea.Scene = function() { }
 sea.Scene.__name__ = true;
+sea.Scene.getWorldContainer = function() {
+	return sea.Scene.worldContainer;
+}
+sea.Scene.width = function() {
+	return sea.Scene.stage.canvas.width;
+}
 sea.Scene.init = function(stage) {
 	sea.Scene.stage = stage;
-	sea.Scene.layers = new Array();
+	sea.Scene.worldLayers = new Array();
+	sea.Scene.guiLayers = new Array();
+	sea.Scene.worldContainer = new createjs.Container();
+	stage.addChild(sea.Scene.worldContainer);
+	sea.Scene.guiContainer = new createjs.Container();
+	stage.addChild(sea.Scene.guiContainer);
+}
+sea.Scene.addToGUILayer = function(obj,layer) {
+	if(layer > 255) throw "LotsOfLayersException";
+	if(layer < 0) throw "NegativeLayerException";
+	if(layer >= sea.Scene.guiLayers.length) {
+		var _g1 = sea.Scene.guiLayers.length, _g = layer + 1;
+		while(_g1 < _g) {
+			var i = _g1++;
+			sea.Scene.guiLayers.push(new createjs.Container());
+			sea.Scene.guiContainer.addChild(sea.Scene.guiLayers[i]);
+		}
+	}
+	sea.Scene.guiLayers[layer].addChild(obj);
 }
 sea.Scene.addToLayer = function(obj,layer) {
 	if(layer > 255) throw "LotsOfLayersException";
 	if(layer < 0) throw "NegativeLayerException";
-	if(layer >= sea.Scene.layers.length) {
-		var _g1 = sea.Scene.layers.length, _g = layer + 1;
+	if(layer >= sea.Scene.worldLayers.length) {
+		var _g1 = sea.Scene.worldLayers.length, _g = layer + 1;
 		while(_g1 < _g) {
 			var i = _g1++;
-			sea.Scene.layers.push(new createjs.Container());
-			sea.Scene.stage.addChild(sea.Scene.layers[i]);
+			sea.Scene.worldLayers.push(new createjs.Container());
+			sea.Scene.worldContainer.addChild(sea.Scene.worldLayers[i]);
 		}
 	}
-	sea.Scene.layers[layer].addChild(obj);
+	sea.Scene.worldLayers[layer].addChild(obj);
 }
 sea.Scene.removeFromLayer = function(obj,layer) {
 	if(layer > 255) throw "LotsOfLayersException";
 	if(layer < 0) throw "NegativeLayerException";
-	if(layer >= sea.Scene.layers.length) throw "NoSuchLayerException";
-	if(!sea.Scene.layers[layer].removeChild(obj)) throw "ChildNotInLayerException";
+	if(layer >= sea.Scene.worldLayers.length) throw "NoSuchLayerException";
+	if(!sea.Scene.worldLayers[layer].removeChild(obj)) throw "ChildNotInLayerException";
 }
 sea.Vector2 = function(x,y) {
 	this.x = x;
@@ -528,6 +552,7 @@ sea.Seabattle.main = function() {
 	sea.Seabattle.stage.canvas.width = js.Lib.window.innerWidth;
 	sea.Seabattle.stage.canvas.height = js.Lib.window.innerHeight;
 	sea.Scene.init(sea.Seabattle.stage);
+	sea.Seabattle.worldContainer = sea.Scene.getWorldContainer();
 	sea.Seabattle.assets = new Hash();
 	var manifest = [{ src : "assets/ship.png", id : "ship"},{ src : "assets/water.png", id : "water"},{ src : "assets/marker.png", id : "marker"},{ src : "assets/island.png", id : "island"},{ src : "assets/rocks.png", id : "rocktile"},{ src : "assets/projectile.png", id : "projectile"},{ src : "assets/waterSplash.png", id : "waterSplash"},{ src : "assets/shipcrash.mp3", id : "shipcrashfx"},{ src : "assets/shipdestroy.png", id : "shipdestroy"}];
 	sea.Seabattle.loader = new createjs.LoadQueue(false);
@@ -563,6 +588,7 @@ sea.Seabattle.setup = function(e) {
 			}
 		}
 	}
+	sea.Seabattle.gui = new sea.StatusGUI();
 	sea.Seabattle.processResult();
 	sea.Seabattle.marker = new sea.Marker(new sea.Vector2(0,0));
 	sea.Seabattle.selectShip(0);
@@ -606,6 +632,7 @@ sea.Seabattle.processResult = function() {
 		++_g;
 		if(ship.orders == null) throw "UndeadShipException";
 	}
+	sea.Seabattle.gui.setPlayerTurn(sea.Seabattle.playerTurn);
 }
 sea.Seabattle.handleFileLoad = function(event) {
 	sea.Seabattle.assets.set(event.item.id,event.item);
@@ -721,7 +748,6 @@ sea.Seabattle.turnOver = function() {
 	sea.Seabattle.server.hasSentResults();
 }
 sea.Seabattle.simulateMoves = function() {
-	if(sea.Seabattle.playerTurn != sea.Seabattle.players) throw "InvalidGameState: Player turn when simulating moves.";
 	var maxTime = 0;
 	var _g1 = 0, _g = sea.Seabattle.ships.length;
 	while(_g1 < _g) {
@@ -742,7 +768,7 @@ sea.Seabattle.simulateMoves = function() {
 	var tw1 = createjs.Tween.get(sea.Seabattle);
 	var tw = tw1.wait(700).to({ time : sea.Seabattle.targetTime},maxTime * sea.Seabattle.timeScale);
 	tw1 = createjs.Tween.get(sea.Seabattle);
-	tw1.to({ scale : sea.Seabattle.scale * 0.5},sea.Seabattle.timeScale * 2,createjs.Ease.sineInOut);
+	tw1.to({ scale : 32},sea.Seabattle.timeScale * 2,createjs.Ease.sineInOut);
 	tw.call(sea.Seabattle.endSimulation);
 	tw.addEventListener("change",sea.Seabattle.progressTime);
 }
@@ -762,8 +788,9 @@ sea.Seabattle.endSimulation = function() {
 	sea.Seabattle.time = 0;
 	sea.Seabattle.targetTime = 0;
 	sea.Seabattle.playerTurn = 0;
+	sea.Seabattle.gui.setPlayerTurn(sea.Seabattle.playerTurn);
 	var tw1 = createjs.Tween.get(sea.Seabattle);
-	tw1.to({ scale : sea.Seabattle.scale * 2},sea.Seabattle.timeScale * 2,createjs.Ease.sineInOut);
+	tw1.to({ scale : 64},sea.Seabattle.timeScale * 2,createjs.Ease.sineInOut);
 	sea.Seabattle.selectShip(0);
 }
 sea.Seabattle.tick = function() {
@@ -779,8 +806,8 @@ sea.Seabattle.tick = function() {
 			ship.moveToSimulatedTime(sea.Seabattle.playerTurn == ship.playerIndex?sea.Seabattle.time:0);
 		}
 	}
-	sea.Seabattle.stage.scaleX = sea.Seabattle.scale;
-	sea.Seabattle.stage.scaleY = sea.Seabattle.scale;
+	sea.Seabattle.worldContainer.scaleX = sea.Seabattle.scale;
+	sea.Seabattle.worldContainer.scaleY = sea.Seabattle.scale;
 	if(sea.Seabattle.marker != null && sea.Seabattle.marker.target != null) {
 		sea.Seabattle.offset.x = sea.Seabattle.marker.position.x;
 		sea.Seabattle.offset.y = sea.Seabattle.marker.position.y;
@@ -788,8 +815,8 @@ sea.Seabattle.tick = function() {
 	var dt = sea.Seabattle.deltaTime;
 	if(dt > 1) dt = 1;
 	sea.Seabattle.currentOffset = sea.Vector2Utils.lerp(sea.Seabattle.currentOffset,sea.Seabattle.offset,dt * 10);
-	sea.Seabattle.stage.x = -sea.Seabattle.currentOffset.x * sea.Seabattle.scale + sea.Seabattle.stage.canvas.width / 2;
-	sea.Seabattle.stage.y = -sea.Seabattle.currentOffset.y * sea.Seabattle.scale + sea.Seabattle.stage.canvas.height / 2;
+	sea.Seabattle.worldContainer.x = -sea.Seabattle.currentOffset.x * sea.Seabattle.scale + sea.Seabattle.stage.canvas.width / 2;
+	sea.Seabattle.worldContainer.y = -sea.Seabattle.currentOffset.y * sea.Seabattle.scale + sea.Seabattle.stage.canvas.height / 2;
 	sea.Seabattle.stage.update();
 }
 sea.Seabattle.worldToScreen = function(p) {
@@ -1058,6 +1085,21 @@ sea.Sound.play = function(id,volume) {
 		sea.Sound.playing.remove(id);
 	});
 	inst.setVolume(volume);
+}
+sea.StatusGUI = function() {
+	this.playerNode = new createjs.Text("","48px Arial","rgb(228,248,255)");
+	this.playerNode.alpha = 0.75;
+	this.playerNode.textAlign = "center";
+	this.playerNode.x = sea.Scene.width() / 2;
+	this.playerNode.y = 20;
+	sea.Scene.addToGUILayer(this.playerNode,1);
+};
+sea.StatusGUI.__name__ = true;
+sea.StatusGUI.prototype = {
+	setPlayerTurn: function(playerTurn) {
+		if(sea.Seabattle.players == playerTurn) this.playerNode.text = "Simulating..."; else this.playerNode.text = "Player " + (playerTurn + 1) + "'s Turn";
+	}
+	,__class__: sea.StatusGUI
 }
 sea.Vector2Utils = function() { }
 sea.Vector2Utils.__name__ = true;
