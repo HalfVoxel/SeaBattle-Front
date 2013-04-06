@@ -17,6 +17,8 @@ class Server {
 
     public var ships : Array<Ship>;
 
+    public var collisionEntities : Array<Entity>;
+
     var processedPlayers = 0;
 
     public function new (width,height : Int) {
@@ -103,9 +105,16 @@ class Server {
                     //ship.checkCollision (v, timestep);
                 }
 
-                for (a in 0...ships.length) {
+                for (a in 0...ships.length) {    
                     for (b in (a+1)...ships.length) {
-                        ships[a].testCollision(ships[b], i, timestep/(TIMESTEPS-1));
+                        if (ships[a].alive() && ships[b].alive()) ships[a].testCollision(ships[b], timestep/(TIMESTEPS-1));
+                    }
+
+                    //Collision with tiles
+                    for (arr in tiles) {
+                        for (tile in arr) {
+                            if (tile != null) ships[a].testCollision(tile, timestep/(TIMESTEPS-1));
+                        }
                     }
                 }
             }
@@ -152,8 +161,11 @@ class Server {
 
         ships = new Array<Ship>();
 
-        setTile(Std.int(width/4), Std.int(height/2), new IslandTile());
-        setTile(Std.int((3*width)/4), Std.int(height/2), new IslandTile());
+        setTile(Std.int(width/4), Std.int(height/2), new IslandTile(new Vector2(Std.int(width/4), Std.int(height/2))));
+        setTile(Std.int((3*width)/4), Std.int(height/2), new IslandTile(new Vector2(Std.int((3*width)/4), Std.int(height/2))));
+
+        setTile(Std.int(width/2), Std.int(height/2), new RockTile(new Vector2(Std.int(width/2), Std.int(height/2))));
+        setTile(Std.int(width/2), Std.int(height/2+1), new RockTile(new Vector2(Std.int(width/2), Std.int(height/2+1))));
 
         ships.push (new Ship (this, 0, ships.length, new Vector2(Std.int(width/4),Std.int(height/2)-1)));
         ships.push (new Ship (this, 0, ships.length, new Vector2(Std.int(width/4),Std.int(height/2)-2)));
@@ -175,11 +187,22 @@ class PlayerTurn {
     public function new () {}
 }
 
-class Tile {
+class Tile extends Entity {
     
-
 }
 
 class IslandTile extends Tile {
-    public function new () {}
+    public function new (pos : Vector2) {
+        var arr = [new Vector2(-0.4,-0.4),new Vector2(0.4,-0.4),new Vector2(0.4,0.4),new Vector2(-0.4,0.4)];
+        shape = new sea.backend.Polygon (arr);
+        shape.center = pos.copy();
+    }
+}
+
+class RockTile extends Tile {
+    public function new (pos : Vector2) {
+        var arr = [new Vector2(-0.4,-0.4),new Vector2(0.4,-0.4),new Vector2(0.4,0.4),new Vector2(-0.4,0.4)];
+        shape = new sea.backend.Polygon (arr);
+        shape.center = pos.copy();
+    }
 }

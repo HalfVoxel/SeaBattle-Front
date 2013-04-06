@@ -7,6 +7,7 @@ import createjs.easeljs.SpriteSheet;
 import createjs.easeljs.Ticker;
 import createjs.easeljs.Shape;
 import createjs.easeljs.Graphics;
+import createjs.tweenjs.Ease;
 import createjs.preloadjs.LoadQueue;
 import sea.Vector2;
 import sea.Order;
@@ -19,6 +20,7 @@ class Seabattle {
 
     public static var scale = 64;
     public static var offset = new Vector2( 1, 1);
+    static var currentOffset = new Vector2( 1, 1);
 
     public static var selectedShip = 0;
 
@@ -113,6 +115,7 @@ class Seabattle {
             {src:"assets/water.png", id:"water"},
             {src:"assets/marker.png", id:"marker"},
             {src:"assets/island.png", id:"island"},
+            {src:"assets/rocks.png", id:"rocktile"},
             {src:"assets/projectile.png", id:"projectile"},
             {src:"assets/waterSplash.png", id:"waterSplash"},
             {src:"assets/shipcrash.mp3", id:"shipcrashfx"},
@@ -155,6 +158,9 @@ class Seabattle {
                     var island : sea.backend.Server.IslandTile = cast tiles[y][x];
                     var isl = new sea.Island (new Vector2(x, y));        
                     trace ("Island " + x + " " + y);
+                } else if (Std.is (tiles[y][x], sea.backend.Server.RockTile)) {
+                    var tile = new sea.RockTile (new Vector2(x, y));
+                    trace ("Rocks");
                 }
             }
         }
@@ -270,10 +276,18 @@ class Seabattle {
                 case 'e'.code:
                     dir = 1;
                     ship.pushOrder({type: OrderType.Fire, dir: dir, endTime: 0.7});
+                    
+                    targetTime = ship.orders.length;
+                    createjs.tweenjs.Tween.removeTweens(Seabattle);
+                    createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
                     return;
                 case 'q'.code:
                     dir = -1;
                     ship.pushOrder({type: OrderType.Fire, dir: dir, endTime: 0.7});
+
+                    targetTime = ship.orders.length;
+                    createjs.tweenjs.Tween.removeTweens(Seabattle);
+                    createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
                     return;
                 default:
                     return;
@@ -283,7 +297,7 @@ class Seabattle {
 
             if (dir != -2) {
                 if (ship.pushOrder ({type: OrderType.Move, dir: dir})) {
-                    targetTime = targetTime+1;
+                    targetTime = ship.orders.length;
                     createjs.tweenjs.Tween.removeTweens(Seabattle);
                     createjs.tweenjs.Tween.get(Seabattle).to({time: targetTime}, 100);
                 }
@@ -344,7 +358,11 @@ class Seabattle {
         targetTime = maxTime;
         time = 0;
         var tw1 = createjs.tweenjs.Tween.get(Seabattle);
-        var tw = tw1.to({time: targetTime}, maxTime*timeScale);
+        var tw = tw1.wait(700).to({time: targetTime}, maxTime*timeScale);
+        //New tween
+        tw1 = createjs.tweenjs.Tween.get(Seabattle);
+        tw1.to({scale: scale*0.5}, timeScale*2, Ease.sineInOut);
+
         tw.call (endSimulation);
         untyped tw.addEventListener ("change", progressTime);
 
@@ -363,6 +381,8 @@ class Seabattle {
         time = 0;
         targetTime = 0;
         playerTurn = 0;
+        var tw1 = createjs.tweenjs.Tween.get(Seabattle);
+        tw1.to({scale: scale*2}, timeScale*2, Ease.sineInOut);
         selectShip(0);
     }
 
@@ -391,8 +411,11 @@ class Seabattle {
         var dt = deltaTime;
         if (dt > 1) dt = 1;
 
-        stage.x = stage.x + ((-offset.x*scale + stage.canvas.width/2) - stage.x)*dt*10;
-        stage.y = stage.y + ((-offset.y*scale + stage.canvas.height/2)- stage.y)*dt*10;
+        currentOffset = Vector2Utils.lerp(currentOffset, offset, dt*10);
+
+        stage.x = -currentOffset.x*scale + stage.canvas.width/2;//stage.x + ((-offset.x*scale + stage.canvas.width/2) - stage.x)*dt*10;
+        stage.y = -currentOffset.y*scale + stage.canvas.height/2;//stage.y + ((-offset.y*scale + stage.canvas.height/2)- stage.y)*dt*10;
+
         stage.update();
     }
 

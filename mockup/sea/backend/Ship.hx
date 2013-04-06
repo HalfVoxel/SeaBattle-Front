@@ -5,7 +5,7 @@ import sea.Order;
 import sea.backend.Server;
 import sea.backend.Polygon;
 
-class Ship {
+class Ship extends sea.backend.Entity {
     public var position : Vector2;
     public var dir : Int;
     public var server : Server;
@@ -20,8 +20,6 @@ class Ship {
     public var destroyed : Int;
     public var playerIndex : Int;
     public var entityIndex : Int;
-
-    public var shape : Polygon;
 
     public var ammunition : Int = 5;
     public var range : Int = 5;
@@ -63,14 +61,8 @@ class Ship {
     public function beginOrder (orderIndex : Int) {
     }
 
-    public function testCollision (other : Ship, orderIndex : Int, time : Float) {
-        if (destroyed != 0) return;
-
-        if (Polygon.intersects (shape,other.shape)) {
-            //trace ("Collision");
-            onCollision (other, orderIndex, time);
-            other.onCollision (this, orderIndex, time);
-        }
+    public override function isSolid () {
+        return alive();
     }
 
     public function simulateTime (orderIndex : Int, t : Float) {
@@ -191,7 +183,7 @@ class Ship {
                         if (ship.alive()) {
                             if (ship.position.sub(p).sqrMagnitude() < 0.1*0.1) {
                                 //HIT
-                                yield (function () {ship.onCollision(this, orderIndex, (i+1)/range);});
+                                yield (function () {ship.onCollision(this, (i+1)/range);});
                                 var o = orders[orderIndex];
                                 o.endTime = (i+1)/range;
                                 orderResult.push (o);
@@ -239,11 +231,14 @@ class Ship {
 
     }
 
-    public function onCollision (other : Ship, orderIndex : Int, time : Float) {
+    public override function onCollision (other : sea.backend.Entity, time : Float) {
 
+        if (!alive()) throw "Collision with destroyed entity.";
+
+        //Dont destroy twice same turn
         if (destroyed > 0) return;
 
-        trace ("Ship " + entityIndex + " collided with " + other.entityIndex + " at " + time);
+        //trace ("Ship " + entityIndex + " collided with " + other.entityIndex + " at " + time);
 
         
 
